@@ -58,7 +58,12 @@
       <tbody>
         {% for inv in invoices %}
         <tr>
-          <td data-label="Référence"><span class="mono td-strong">{{ inv.reference }}</span></td>
+          <td data-label="Référence">
+            <span class="mono td-strong">{{ inv.reference }}</span>
+            <span class="cell-sub">
+              <a href="{% url 'invoice_pdf' inv.pk %}" title="{% trans 'Facture PDF avec QR code de paiement' %}">PDF ↓</a>
+            </span>
+          </td>
           <td data-label="Client">{{ inv.client_name }}{% if inv.client_phone %}<span class="cell-sub">{{ inv.client_phone }}</span>{% endif %}</td>
           <td data-label="Montant" class="td-num td-strong">{{ inv.amount|floatformat:0 }} FCFA</td>
           <td data-label="Émission">{{ inv.issue_date|date:"d/m/Y" }}</td>

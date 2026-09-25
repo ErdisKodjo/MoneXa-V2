@@ -63,7 +63,7 @@ from finance.services.gateways import (
     request_collection,
 )
 from finance.services.matcher import match_payment
-from reporting.pdf import bilan_pdf, journal_caisse_pdf
+from reporting.pdf import bilan_pdf, invoice_pdf, journal_caisse_pdf
 from reporting.services import compute_kpis
 
 from .forms import (
@@ -166,6 +166,11 @@ class DashboardView(CaissierRequiredMixin, TemplateView):
         ]
 
         ctx["kpis"] = kpis
+
+        # Fiabilité clients (v2.3) — score 0-100 par client
+        from finance.services.client_scoring import client_reliability_scores
+
+        ctx["client_scores"] = client_reliability_scores()
         return ctx
 
 
@@ -229,6 +234,19 @@ class InvoiceCreateView(CaissierRequiredMixin, CreateView):
         ctx = super().get_context_data(**kwargs)
         ctx["next_reference"] = Invoice.generate_reference()
         return ctx
+
+
+class InvoicePDFView(CaissierRequiredMixin, View):
+    """Facture PDF avec QR code de paiement T-Money / Moov / Flooz (v2.3)."""
+
+    def get(self, request, pk: int):
+        invoice = get_object_or_404(Invoice, pk=pk)
+        data = invoice_pdf(invoice)
+        response = HttpResponse(data, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="monexa_facture_{invoice.reference}.pdf"'
+        )
+        return response
 
 
 # ═══════════════════════════════════════════════════════════════════════════

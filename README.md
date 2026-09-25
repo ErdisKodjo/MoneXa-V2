@@ -303,10 +303,10 @@ Voir [`docs/design-system.md`](docs/design-system.md) pour la charte complète.
 - Module Dépenses & Fournisseurs complet + catégorisation IA
 - Exports SYSCOHADA complets (journal, balance, compte de résultat)
 - Fermeture de caisse espèces anti-fraude
-- Factures PDF avec QR code de paiement T-Money/Moov
-- Rappels automatiques LLM pour factures impayées > 7 jours
-- Scoring de fiabilité clients
-- Rapport hebdomadaire LLM par email (CFO virtuel)
+- ✅ **Factures PDF avec QR code de paiement T-Money/Moov (V2.3)** — `/factures/<id>/pdf/`, codes USSD *880# / *155# / *110#, marquage EN RETARD automatique
+- ✅ **Rappels automatiques LLM pour factures impayées > 7 jours (V2.3)** — `send_reminders` rédige les relances (LLM si clé API, template sinon), anti-spam, `--dry-run`
+- ✅ **Scoring de fiabilité clients (V2.3)** — score 0–100 (règlement, ponctualité, impayés, anomalies) affiché sur le dashboard
+- ✅ **Rapport hebdomadaire LLM (CFO virtuel, V2.3)** — `generate_weekly_report` : chiffres pré-calculés + rédaction LLM, livré en notification aux Gérants
 - PWA offline-first pour caissier
 - Notifications WhatsApp Business
 

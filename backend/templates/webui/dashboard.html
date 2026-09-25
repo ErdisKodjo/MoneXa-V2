@@ -179,4 +179,48 @@
     <p class="card-foot">{% trans "Projections issues de l'historique des flux — générées par la commande generate_forecast." %}</p>
   </section>
 </div>
+
+<section class="card" style="margin-top:16px">
+  <header class="card-head">
+    <h2 class="card-title">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+      {% trans "Fiabilité clients" %}
+    </h2>
+    <span class="card-hint">{% trans "score 0–100 — règlement, ponctualité, anomalies" %}</span>
+  </header>
+  {% if client_scores %}
+  <div class="table-wrap">
+    <table class="table table-plain">
+      <thead>
+        <tr>
+          <th>{% trans "Client" %}</th>
+          <th class="th-num">{% trans "Score" %}</th>
+          <th class="th-num">{% trans "Fiabilité" %}</th>
+          <th class="th-num">{% trans "Factures" %}</th>
+          <th class="th-num">{% trans "À l'heure" %}</th>
+          <th class="th-num">{% trans "En retard" %}</th>
+          <th class="th-num">{% trans "Impayés" %}</th>
+          <th class="th-num">{% trans "Anomalies" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in client_scores %}
+        <tr>
+          <td class="td-strong">{{ c.name }}</td>
+          <td class="td-num td-strong">{{ c.score }}<span class="cell-sub">/100</span></td>
+          <td class="td-num"><span class="badge {% if c.tone == 'success' %}badge-success{% elif c.tone == 'warning' %}badge-warning{% else %}badge-danger{% endif %}">{{ c.label }}</span></td>
+          <td class="td-num">{{ c.invoices }}</td>
+          <td class="td-num">{{ c.on_time }}</td>
+          <td class="td-num">{{ c.late_open }}</td>
+          <td class="td-num">{% if c.outstanding %}{{ c.outstanding|floatformat:0 }} FCFA{% else %}—{% endif %}</td>
+          <td class="td-num">{{ c.anomalies }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">{% trans "Aucune facture enregistrée — le score s'affichera dès les premières opérations." %}</p>
+  {% endif %}
+</section>
 {% endblock %}

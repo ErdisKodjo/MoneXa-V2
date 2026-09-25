@@ -27,6 +27,11 @@ urlpatterns = [
     # Factures
     path("factures/", views.InvoiceListView.as_view(), name="invoices"),
     path("factures/nouvelle/", views.InvoiceCreateView.as_view(), name="invoice_create"),
+    path(
+        "factures/<int:pk>/pdf/",
+        views.InvoicePDFView.as_view(),
+        name="invoice_pdf",
+    ),
     # Paiements
     path("paiements/", views.PaymentListView.as_view(), name="payments"),
     path(

@@ -1,8 +1,11 @@
 """
-Exports PDF (reportlab) — journal de caisse et bilan de trésorerie.
+Exports PDF (reportlab) — journal de caisse, bilan de trésorerie,
+facture client avec QR code de paiement Mobile Money.
 
 Ajout v2.1 au-delà du CSV : documents présentables pour la comptabilité
 et la banque (charte MoneXa, en-tête, totaux, pied de page horodaté).
+Ajout v2.3 : facture PDF prête à envoyer au client — QR code à scanner
+pour payer via T-Money / Moov Money / Flooz (mode USSD, zéro intégration).
 """
 from __future__ import annotations
 
@@ -195,6 +198,131 @@ def bilan_pdf(days: int = 30) -> bytes:
             S_TD,
         ),
         Paragraph("Document présentable à la banque — totaux issus des écritures réconciliées MoneXa.", S_NOTE),
+    ]
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Facture client PDF avec QR code de paiement (v2.3)
+# ──────────────────────────────────────────────────────────────────────────
+
+def _qr_payment_payload(invoice) -> str:
+    """
+    Contenu du QR code scannable par le client : référence, montant et
+    codes USSD Mobile Money (Togo). Texte brut lisible par n'importe quel
+    appareil photo — aucune intégration opérateur requise.
+    """
+    montant = _fmt_fcfa(invoice.amount)
+    return (
+        f"MoneXa — Paiement facture {invoice.reference}\n"
+        f"Client : {invoice.client_name}\n"
+        f"Montant : {montant}\n"
+        f"T-Money : *880# (transfert vers le marchand MoneXa)\n"
+        f"Moov Money : *155#\n"
+        f"Flooz : *110#\n"
+        f"Renseignez la référence {invoice.reference} dans le motif."
+    )
+
+
+def invoice_pdf(invoice) -> bytes:
+    """
+    Facture PDF prête à envoyer au client :
+    en-tête MoneXa, coordonnées, montant, échéance, statut et QR code
+    de paiement Mobile Money (T-Money / Moov / Flooz par USSD).
+    """
+    import qrcode  # import local : évite tout coût au chargement du module
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm, bottomMargin=18 * mm,
+        title=f"MoneXa — Facture {invoice.reference}", author="MoneXa",
+    )
+
+    # QR code PNG en mémoire (aucun fichier disque)
+    qr_img = qrcode.make(_qr_payment_payload(invoice), box_size=8, border=2)
+    qr_buf = io.BytesIO()
+    qr_img.save(qr_buf, format="PNG")
+    qr_buf.seek(0)
+    from reportlab.platypus import Image as RLImage
+    qr = RLImage(qr_buf, width=48 * mm, height=48 * mm)
+
+    overdue = (invoice.status == "EN_ATTENTE" and invoice.due_date < dj_tz.localdate())
+    statut_label = invoice.get_status_display()
+    if overdue:
+        statut_label += " — EN RETARD"
+
+    info_rows = [
+        ["Référence", "Client", "Téléphone"],
+        [
+            Paragraph(f"<b>{invoice.reference}</b>", S_TD),
+            Paragraph(f"<b>{invoice.client_name}</b>", S_TD),
+            invoice.client_phone or "—",
+        ],
+        ["Émise le", "Échéance", "Statut"],
+        [
+            invoice.issue_date.strftime("%d/%m/%Y"),
+            Paragraph(
+                f"<b>{invoice.due_date.strftime('%d/%m/%Y')}</b>"
+                + (" <font color='#DC2626'>(retard)</font>" if overdue else ""),
+                S_TD,
+            ),
+            Paragraph(
+                f"<font color='#DC2626'>{statut_label}</font>" if overdue else statut_label,
+                S_TD,
+            ),
+        ],
+    ]
+    info = Table(info_rows, colWidths=[56 * mm, 56 * mm, 58 * mm])
+    info.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("BACKGROUND", (0, 2), (-1, 2), CREAM),
+        ("TEXTCOLOR", (0, 2), (-1, 2), DARK),
+        ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 2), (-1, 2), 8),
+        ("GRID", (0, 0), (-1, -1), 0.4, MUTED),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+
+    total = Table(
+        [["TOTAL À PAYER"], [Paragraph(f"<b>{_fmt_fcfa(invoice.amount)}</b>", ParagraphStyle("mx_total", parent=_BASE["Title"], fontSize=18, textColor=BRAND))]],
+        colWidths=[170 * mm],
+    )
+    total.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), DARK),
+        ("TEXTCOLOR", (0, 0), (0, 0), colors.white),
+        ("FONTNAME", (0, 0), (0, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (0, 0), 10),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOX", (0, 0), (-1, -1), 0.8, BRAND),
+        ("TOPPADDING", (0, 1), (0, 1), 6),
+        ("BOTTOMPADDING", (0, 1), (0, 1), 8),
+    ]))
+
+    story = [
+        Paragraph(f"Facture {invoice.reference}", S_TITLE),
+        Paragraph(f"MoneXa — Votre trésorerie centralisée · {_stamp()}", S_SUB),
+        Spacer(1, 6 * mm),
+        info,
+        Spacer(1, 8 * mm),
+        total,
+        Spacer(1, 8 * mm),
+        Paragraph("Paiement Mobile Money — scannez ce QR code", S_H2),
+        qr,
+        Paragraph(
+            "Le client compose le code USSD de son opérateur (T-Money *880#, "
+            "Moov Money *155#, Flooz *110#), transfère le montant exact et "
+            f"mentionne la référence <b>{invoice.reference}</b> dans le motif. "
+            "Le SMS de confirmation est automatiquement réconcilié par l'IA MoneXa.",
+            S_NOTE,
+        ),
+        Paragraph("Document généré par MoneXa — traçable dans le journal d'audit immuable.", S_NOTE),
     ]
     doc.build(story)
     return buf.getvalue()

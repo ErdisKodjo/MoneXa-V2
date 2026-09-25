@@ -68,7 +68,13 @@ Transfert recu de AFI Adjovi (94123456). Montant: 10 000 FCFA. ID Transaction: M
 ## 8. TresorIA & Exports
 - **TresorIA** : questions en langage naturel sur les KPIs (jamais de SQL libre) — LLM réel si clé API, sinon moteur de règles hors-ligne.
 - **TresorIA mobile** : nouvel écran Flutter (5e onglet) avec **saisie vocale** (micro) — FR / Ewé / Kabyé.
-- **Exports** : CSV (Excel/SYSCOHADA) + **PDF présentables** : journal de caisse, bilan de trésorerie 30/90 jours.
+- **Exports** : CSV (Excel/SYSCOHADA) + **PDF présentables** : journal de caisse, bilan de trésorerie 30/90 jours, **facture client avec QR code**.
+
+## 8-bis. Nouveautés V2.3 (WOW jury — 90 secondes)
+1. **Facture PDF avec QR de paiement** → Factures → lien « PDF ↓ » sous la référence → le PDF s'ouvre : en-tête MoneXa, TOTAL À PAYER, QR code scannable (T-Money *880#, Moov *155#, Flooz *110#). Le jury scanne le QR avec son téléphone → il voit référence + montant. Factures échues marquées « EN RETARD » en rouge.
+2. **Fiabilité clients** → Dashboard, dernière carte : score 0–100 par client (Fiable / Vigilance / Risque) calculé sur règlement, ponctualité, impayés et anomalies.
+3. **Relances IA** → terminal : `python manage.py send_reminders --dry-run` → les messages de relance des factures > 7 j de retard, rédigés par l'IA (ou template hors-ligne). Sans `--dry-run` : notifications créées pour Gérant + Comptable (cloche en haut à droite).
+4. **Rapport hebdo CFO** → terminal : `python manage.py generate_weekly_report` → bilan de la semaine chiffré + recommandation, livré en notification aux Gérants.
 
 ## 9. App mobile (Flutter)
 - PWA installable (manifest MoneXa sur le web ET sur l'interface Django) + APK : `bash mobile_app/build_apk.sh`.
@@ -80,7 +86,7 @@ Transfert recu de AFI Adjovi (94123456). Montant: 10 000 FCFA. ID Transaction: M
 - `DecimalField(14,2)` partout, `provider_ref` UNIQUE au niveau DB (anti-doublon natif).
 - Audit immuable : hash-chain SHA-256, `save()`/`delete()` verrouillés, `verify_chain()` en direct sur la page Audit.
 - RBAC 3 niveaux cohérent côté API (DRF permissions) et côté web (mixins).
-- Tests : **80 tests pytest verts**, smoke tests web 23 + 14 vérifiés.
+- Tests : **99 tests pytest verts**, smoke tests web 23 + 14 vérifiés.
 - PostgreSQL via `DATABASE_URL` (docker-compose fourni) ; SQLite fallback tests.
 - TresorIA : LLM réel (GPT-4o-mini / Gemini) si clé API — KPIs pré-calculés injectés dans le prompt, **jamais de SQL, jamais d'accès DB** ; sinon moteur de règles déterministe 100 % hors-ligne (variable `TREASORIA_USE_LLM=0` pour forcer les règles).
 
