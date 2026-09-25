@@ -171,6 +171,11 @@ class DashboardView(CaissierRequiredMixin, TemplateView):
         from finance.services.client_scoring import client_reliability_scores
 
         ctx["client_scores"] = client_reliability_scores()
+
+        # Alerte de tension de trésorerie (v2.3) — « ANTICIPER »
+        from finance.services.tension import tension_alert
+
+        ctx["tension"] = tension_alert()
         return ctx
 
 

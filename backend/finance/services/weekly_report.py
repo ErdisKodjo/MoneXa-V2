@@ -44,6 +44,12 @@ def _weekly_facts() -> dict:
     """Chiffres factuels de la semaine — calculés côté serveur uniquement."""
     kpis = compute_kpis()
     start = timezone.now() - timezone.timedelta(days=7)
+
+    # Alerte de tension de trésorerie (déterministe, jamais de LLM ici)
+    from finance.services.tension import tension_alert
+
+    tension = tension_alert()
+
     return {
         "periode": f"{(start):%d/%m/%Y} → {timezone.now():%d/%m/%Y}",
         "encaisse_7j": kpis.get("encaisse_7j", 0),
@@ -57,12 +63,20 @@ def _weekly_facts() -> dict:
         "prevision_j7": kpis.get("prevision_j7", 0),
         "prevision_j30": kpis.get("prevision_j30", 0),
         "top_clients": kpis.get("top_5_clients", []),
+        "tension": tension,
     }
 
 
 def _facts_text(facts: dict) -> str:
     top = " ; ".join(
         f"{c['name']} ({_fmt_fcfa(c['total'])})" for c in facts.get("top_clients", [])[:3]
+    )
+    tension = facts.get("tension")
+    tension_line = (
+        f"- ALERTE : risque de tension de trésorerie dans {tension['days_away']} jour(s) "
+        f"(balance projetée {_fmt_fcfa(tension['balance_pessimist'])}, cause probable : {tension['cause']})"
+        if tension
+        else "- Trésorerie : aucune tension projetée sur 30 jours"
     )
     return "\n".join(
         [
@@ -75,6 +89,7 @@ def _facts_text(facts: dict) -> str:
             f"- Paiements à valider : {facts['paiements_a_valider']}",
             f"- Anomalies en cours : {facts['nb_anomalies']}",
             f"- Prévision J+7 : {_fmt_fcfa(facts['prevision_j7'])} · J+30 : {_fmt_fcfa(facts['prevision_j30'])}",
+            tension_line,
             f"- Top clients : {top or 'aucun'}",
         ]
     )
@@ -84,7 +99,13 @@ def _template_report(facts: dict) -> str:
     """Synthèse déterministe — démo hors-ligne garantie."""
     net_7j = facts["encaisse_7j"] - facts["decaisse_7j"]
     sens = "excédent" if net_7j >= 0 else "déficit"
+    tension = facts.get("tension")
     alertes = []
+    if tension:
+        alertes.append(
+            f"risque de tension de trésorerie dans {tension['days_away']} jour(s) "
+            f"(cause probable : {tension['cause']})"
+        )
     if facts["factures_en_retard"]:
         alertes.append(f"{facts['factures_en_retard']} facture(s) en retard de paiement")
     if facts["paiements_a_valider"]:

@@ -181,6 +181,23 @@
 </div>
 
 <section class="card" style="margin-top:16px">
+  {% if tension %}
+  <div class="alert-banner alert-danger" role="alert">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+    <div>
+      <strong>{% trans "Risque de tension de trésorerie" %} — {% blocktrans with d=tension.days_away %}dans {{ d }} jour(s){% endblocktrans %} ({{ tension.date|date:"d/m/Y" }})</strong><br>
+      <span style="font-weight:400">
+        {% blocktrans with b=tension.balance_pessimist|floatformat:0 %}Balance projetée : {{ b }} FCFA (scénario prudent, plancher {{ tension.floor|floatformat:0 }} FCFA).{% endblocktrans %}<br>
+        {% trans "Cause probable" %} : {{ tension.cause }} — {% trans "gravité" %} : {{ tension.severity }}.
+      </span>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert-banner alert-success" role="status">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+    <span>{% trans "Trésorerie saine — aucune tension projetée sur les 30 prochains jours." %}</span>
+  </div>
+  {% endif %}
   <header class="card-head">
     <h2 class="card-title">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>

@@ -73,8 +73,9 @@ Transfert recu de AFI Adjovi (94123456). Montant: 10 000 FCFA. ID Transaction: M
 ## 8-bis. Nouveautés V2.3 (WOW jury — 90 secondes)
 1. **Facture PDF avec QR de paiement** → Factures → lien « PDF ↓ » sous la référence → le PDF s'ouvre : en-tête MoneXa, TOTAL À PAYER, QR code scannable (T-Money *880#, Moov *155#, Flooz *110#). Le jury scanne le QR avec son téléphone → il voit référence + montant. Factures échues marquées « EN RETARD » en rouge.
 2. **Fiabilité clients** → Dashboard, dernière carte : score 0–100 par client (Fiable / Vigilance / Risque) calculé sur règlement, ponctualité, impayés et anomalies.
-3. **Relances IA** → terminal : `python manage.py send_reminders --dry-run` → les messages de relance des factures > 7 j de retard, rédigés par l'IA (ou template hors-ligne). Sans `--dry-run` : notifications créées pour Gérant + Comptable (cloche en haut à droite).
-4. **Rapport hebdo CFO** → terminal : `python manage.py generate_weekly_report` → bilan de la semaine chiffré + recommandation, livré en notification aux Gérants.
+3. **Alerte de tension de trésorerie** → Dashboard, bannière : « Risque de tension dans N jour(s) » + cause probable, ou « Trésorerie saine sur 30 jours ». Détection déterministe sur les projections Holt-Winters (scénario prudent = borne basse 80 %). Détail jury : *« Monexa ne montre pas un graphique, il réagit à l'avenir projeté. »*
+4. **Relances IA** → terminal : `python manage.py send_reminders --dry-run` → les messages de relance des factures > 7 j de retard, rédigés par l'IA (ou template hors-ligne). Sans `--dry-run` : notifications créées pour Gérant + Comptable (cloche en haut à droite).
+5. **Rapport hebdo CFO** → terminal : `python manage.py generate_weekly_report` → bilan de la semaine chiffré + alertes + recommandation, livré en notification aux Gérants.
 
 ## 9. App mobile (Flutter)
 - PWA installable (manifest MoneXa sur le web ET sur l'interface Django) + APK : `bash mobile_app/build_apk.sh`.
