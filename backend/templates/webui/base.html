@@ -187,8 +187,182 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { closeDrawer(); }
   });
-  document.querySelectorAll('.flash-dismiss').forEach(function (b) {
-    b.addEventListener('click', function () { b.parentElement.remove(); });
+})();
+</script>
+<script>
+/* V2.4 — Dynamique & flux impeccable (progressive enhancement, zéro dépendance) */
+(function () {
+  'use strict';
+  var reduce = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* 1. Flash : sortie douce + auto-dismiss 6 s (le bouton reste la voie manuelle) */
+  document.querySelectorAll('.flash').forEach(function (f) {
+    var timer = setTimeout(function () { dismissFlash(f); }, 6000);
+    var b = f.querySelector('.flash-dismiss');
+    if (b) b.addEventListener('click', function () {
+      clearTimeout(timer);
+      dismissFlash(f);
+    });
+  });
+  function dismissFlash(f) {
+    if (reduce) { f.remove(); return; }
+    f.style.transition = 'opacity .25s ease, transform .25s ease';
+    f.style.opacity = '0';
+    f.style.transform = 'translateY(-8px)';
+    setTimeout(function () { f.remove(); }, 260);
+  }
+
+  /* 2. Anti double-submit : spinner sur le bouton au moment du POST */
+  document.querySelectorAll('form').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      var b = form.querySelector('button[type="submit"]');
+      if (!b || b.classList.contains('is-loading') || b.classList.contains('is-loading-text')) return;
+      var label = form.getAttribute('data-loading-text');
+      if (label) {
+        b.classList.add('is-loading-text');
+        b.dataset.original = b.innerHTML;
+        b.innerHTML = '';
+        var s = document.createElement('span');
+        s.textContent = label;
+        b.appendChild(s);
+      } else {
+        b.classList.add('is-loading');
+      }
+      b.setAttribute('aria-busy', 'true');
+    });
+  });
+
+  /* 3. Compteurs animés (tabular-nums → zéro décalage de layout) */
+  function fmt(n) { return String(Math.round(n)); }
+  function countUp(el) {
+    var target = parseFloat(el.getAttribute('data-count'));
+    if (isNaN(target)) return;
+    if (reduce || target === 0) { el.textContent = fmt(target); return; }
+    var t0 = null;
+    el.textContent = '0';
+    function step(ts) {
+      if (t0 === null) t0 = ts;
+      var p = Math.min((ts - t0) / 700, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(target * eased);
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = fmt(target);
+    }
+    requestAnimationFrame(step);
+  }
+  document.querySelectorAll('[data-count]').forEach(countUp);
+
+  /* 4. Donut de répartition par canal — SVG généré depuis data-donut (JSON) */
+  var TONES = {
+    'canal-tmoney': '#063082', 'canal-moov': '#059669', 'canal-flooz': '#f59e0b',
+    'canal-banque': '#9da9c3', 'canal-especes': '#2c3e5a',
+    'success': '#059669', 'danger': '#dc2626', 'indigo': '#063082', 'gold': '#f59e0b'
+  };
+  function compact(v) {
+    if (v >= 1e7) return (v / 1e6).toFixed(0) + ' M';
+    if (v >= 1e6) return (v / 1e6).toFixed(1).replace('.', ',') + ' M';
+    if (v >= 1e3) return Math.round(v / 1e3) + ' k';
+    return String(Math.round(v));
+  }
+  var NS = 'http://www.w3.org/2000/svg';
+  document.querySelectorAll('[data-donut]').forEach(function (host) {
+    var data;
+    try { data = JSON.parse(host.getAttribute('data-donut')); } catch (e) { return; }
+    if (!Array.isArray(data) || !data.length) return;
+    var total = data.reduce(function (s, d) { return s + (Number(d.value) || 0); }, 0);
+    if (total <= 0) return;
+    var R = 52, C = 2 * Math.PI * R, GAP = 2.5, acc = 0;
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 120 120');
+    var segs = [];
+    data.forEach(function (d, i) {
+      var frac = (Number(d.value) || 0) / total;
+      var len = Math.max(frac * C - GAP, 0.6);
+      var seg = document.createElementNS(NS, 'circle');
+      seg.setAttribute('cx', '60');
+      seg.setAttribute('cy', '60');
+      seg.setAttribute('r', String(R));
+      seg.setAttribute('stroke', TONES[d.tone] || '#9da9c3');
+      seg.setAttribute('stroke-dashoffset', (-acc).toFixed(2));
+      seg.setAttribute('stroke-dasharray', '0 ' + C.toFixed(2));
+      seg.classList.add('donut-seg');
+      seg.style.transitionDelay = (i * 90) + 'ms';
+      svg.appendChild(seg);
+      segs.push({ seg: seg, target: len + ' ' + (C - len).toFixed(2) });
+      acc += frac * C;
+    });
+    var center = document.createElement('div');
+    center.className = 'donut-center';
+    var tot = document.createElement('span');
+    tot.className = 'donut-total';
+    tot.textContent = compact(total);
+    var lab = document.createElement('span');
+    lab.className = 'donut-total-label';
+    lab.textContent = 'FCFA';
+    center.appendChild(tot);
+    center.appendChild(lab);
+    host.appendChild(svg);
+    host.appendChild(center);
+    /* déclenche la transition après application de l'état initial */
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        segs.forEach(function (s) { s.seg.setAttribute('stroke-dasharray', s.target); });
+      });
+    });
+  });
+
+  /* 5. Jauges radiales de fiabilité client — depuis data-gauge / data-tone */
+  var GAUGE_COLORS = { success: '#059669', warning: '#d97706', danger: '#dc2626' };
+  document.querySelectorAll('[data-gauge]').forEach(function (host) {
+    var score = parseFloat(host.getAttribute('data-gauge'));
+    if (isNaN(score)) return;
+    var tone = host.getAttribute('data-tone') || 'success';
+    var R = 12, C = 2 * Math.PI * R;
+    var len = C * Math.max(0, Math.min(score, 100)) / 100;
+    var ring = document.createElement('span');
+    ring.className = 'gauge-ring';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 32 32');
+    var track = document.createElementNS(NS, 'circle');
+    track.setAttribute('cx', '16');
+    track.setAttribute('cy', '16');
+    track.setAttribute('r', String(R));
+    track.setAttribute('stroke', '#eef1f7');
+    var seg = document.createElementNS(NS, 'circle');
+    seg.setAttribute('cx', '16');
+    seg.setAttribute('cy', '16');
+    seg.setAttribute('r', String(R));
+    seg.setAttribute('stroke', GAUGE_COLORS[tone] || '#059669');
+    seg.setAttribute('stroke-dasharray', '0 ' + C.toFixed(2));
+    seg.classList.add('gauge-seg');
+    svg.appendChild(track);
+    svg.appendChild(seg);
+    var val = document.createElement('span');
+    val.className = 'gauge-val';
+    val.textContent = fmt(score);
+    ring.appendChild(svg);
+    ring.appendChild(val);
+    host.textContent = '';
+    host.appendChild(ring);
+    var sub = document.createElement('span');
+    sub.className = 'cell-sub';
+    sub.textContent = '/100';
+    host.appendChild(sub);
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        seg.setAttribute('stroke-dasharray', len.toFixed(2) + ' ' + C.toFixed(2));
+      });
+    });
+  });
+
+  /* 6. Avatars : dégradé déterministe par hash du nom */
+  var GRADS = ['avatar-g1', 'avatar-g2', 'avatar-g3', 'avatar-g4', 'avatar-g5'];
+  document.querySelectorAll('.avatar').forEach(function (a) {
+    var s = (a.textContent || '').trim();
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    a.classList.add(GRADS[h % GRADS.length]);
   });
 })();
 </script>

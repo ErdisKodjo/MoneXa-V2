@@ -20,7 +20,7 @@
     <span class="card-hint">{% trans "Extraction automatique, rapprochement puis validation comptable." %}</span>
   </header>
   <div class="scanner-grid">
-    <form class="scanner-form" method="post" action="{% url 'payment_evidence' %}" enctype="multipart/form-data">
+    <form class="scanner-form" method="post" action="{% url 'payment_evidence' %}" enctype="multipart/form-data" data-loading-text="Analyse IA en cours…">
       {% csrf_token %}
       <p class="scanner-step">{% trans "Option 1 — Photo du reçu" %}</p>
       <div class="field">

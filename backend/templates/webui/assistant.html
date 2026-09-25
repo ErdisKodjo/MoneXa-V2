@@ -70,5 +70,30 @@ function mxFill(q) {
 document.querySelectorAll('.suggestion').forEach(function (b) {
   b.addEventListener('click', function () { mxFill(b.dataset.q); });
 });
+
+/* V2.4 — fil de discussion : auto-scroll + bulle « TresorIA réfléchit » pendant le POST */
+(function () {
+  var scroll = document.querySelector('.chat-scroll');
+  var chatForm = document.querySelector('.chat-form');
+  if (!scroll || !chatForm) return;
+  scroll.scrollTop = scroll.scrollHeight;
+  chatForm.addEventListener('submit', function () {
+    if (scroll.querySelector('.chat-typing')) return;
+    var row = document.createElement('div');
+    row.className = 'chat-row chat-row-bot';
+    var av = document.createElement('span');
+    av.className = 'chat-avatar';
+    av.setAttribute('aria-hidden', 'true');
+    av.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>';
+    var typing = document.createElement('div');
+    typing.className = 'chat-typing';
+    typing.setAttribute('aria-hidden', 'true');
+    typing.innerHTML = '<i></i><i></i><i></i>';
+    row.appendChild(av);
+    row.appendChild(typing);
+    scroll.appendChild(row);
+    scroll.scrollTop = scroll.scrollHeight;
+  });
+})();
 </script>
 {% endblock %}

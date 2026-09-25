@@ -307,6 +307,7 @@ Voir [`docs/design-system.md`](docs/design-system.md) pour la charte complète.
 - ✅ **Rappels automatiques LLM pour factures impayées > 7 jours (V2.3)** — `send_reminders` rédige les relances (LLM si clé API, template sinon), anti-spam, `--dry-run`
 - ✅ **Scoring de fiabilité clients (V2.3)** — score 0–100 (règlement, ponctualité, impayés, anomalies) affiché sur le dashboard
 - ✅ **Rapport hebdomadaire LLM (CFO virtuel, V2.3)** — `generate_weekly_report` : chiffres pré-calculés + rédaction LLM, livré en notification aux Gérants
+- ✅ **Design system premium (V2.4)** — images dynamiques (donut canaux animé, jauges radiales de fiabilité, compteurs KPI, aurore animée sur la page de connexion), flux impeccable (View Transitions, entrées orchestrées, anti double-submit, indicateur TresorIA « réfléchit ») — zéro dépendance JS, progressive enhancement, barres CSS réparées (bug localisation fr)
 - PWA offline-first pour caissier
 - Notifications WhatsApp Business
 
