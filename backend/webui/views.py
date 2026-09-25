@@ -68,6 +68,7 @@ from reporting.services import compute_kpis
 
 from .forms import (
     AssistantQuestionForm,
+    BankStatementForm,
     CollectionForm,
     ExpenseForm,
     InvoiceForm,
@@ -836,3 +837,69 @@ class BilanPDFView(ComptableRequiredMixin, View):
         response = HttpResponse(data, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="monexa_bilan_{days}j.pdf"'
         return response
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Banque — rapprochement multi-comptes par import de relevé CSV (v2.3)
+# ═══════════════════════════════════════════════════════════════════════════
+class BankImportView(ComptableRequiredMixin, FormView):
+    """
+    GET/POST /banque/ — upload du relevé CSV, rapprochement automatique
+    via la cascade de matching, rapport détaillé en session.
+
+    Règle : toute écriture financière est transactionnelle et idempotente
+    (provider_ref BQ-… unique — un relevé ré-importé ne crée rien).
+    """
+    template_name = "webui/bank.html"
+    form_class = BankStatementForm
+    success_url = reverse_lazy("bank")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["report"] = self.request.session.pop("bank_report", None)
+        ctx["details"] = self.request.session.pop("bank_report_details", [])
+        return ctx
+
+    def form_valid(self, form):
+        from finance.services.bank_reconcile import (
+            parse_bank_csv,
+            reconcile_bank_statement,
+        )
+
+        csv_bytes = form.cleaned_data["statement"].read()
+        lines, errors, debits_ignored = parse_bank_csv(csv_bytes)
+        if not lines and not errors:
+            errors = ["Aucune ligne CRÉDIT exploitable trouvée dans le fichier."]
+        report = reconcile_bank_statement(
+            lines,
+            created_by=self.request.user,
+            debits_ignored=debits_ignored,
+            errors=errors,
+        )
+        self.request.session["bank_report"] = report.as_dict()
+        self.request.session["bank_report_details"] = report.details[:100]
+
+        if report.imported:
+            messages.success(
+                self.request,
+                _("Relevé importé : %(imported)s encaissement(s) créé(s), "
+                  "%(matched)s rapproché(s) automatiquement, "
+                  "%(skipped)s doublon(s) ignoré(s).")
+                % {
+                    "imported": report.imported,
+                    "matched": report.matched_ref + report.matched_amount + report.matched_fuzzy,
+                    "skipped": report.skipped,
+                },
+            )
+        else:
+            messages.warning(
+                self.request,
+                _("Aucun nouvel encaissement importé (%(skipped)s doublon(s) "
+                  "déjà présent(s), %(errors)s erreur(s)).")
+                % {"skipped": report.skipped, "errors": len(report.errors)},
+            )
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, _("Fichier refusé : vérifiez le format CSV."))
+        return super().form_invalid(form)

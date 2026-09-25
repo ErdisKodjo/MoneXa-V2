@@ -31,10 +31,15 @@ def _similarity(a: str, b: str) -> float:
 
 
 def _find_by_reference(payment: Payment) -> Optional[Invoice]:
-    """Level 1 — provider_ref contains an invoice reference."""
+    """
+    Level 1 — référence facture présente dans provider_ref OU dans le
+    libellé du payeur (cas des virements bancaires : « VIREMENT
+    FACT-2026-0012 BTP PLUS » — v2.3 rapprochement multi-comptes).
+    """
+    haystack = f"{payment.provider_ref} {payment.payer_name}"
     candidates = Invoice.objects.filter(status=InvoiceStatus.EN_ATTENTE)
     for invoice in candidates:
-        if invoice.reference and invoice.reference in payment.provider_ref:
+        if invoice.reference and invoice.reference in haystack:
             return invoice
     return None
 

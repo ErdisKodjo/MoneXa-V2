@@ -240,3 +240,28 @@ class CollectionForm(forms.Form):
 
 STATUS_FILTER_CHOICES = None  # renseigné dynamiquement dans les vues
 CHANNEL_FILTER_CHOICES = Channel.choices
+
+
+class BankStatementForm(forms.Form):
+    """Import d'un relevé bancaire CSV pour le rapprochement multi-comptes."""
+
+    statement = forms.FileField(
+        label="Relevé bancaire (CSV)",
+        help_text=(
+            "Colonnes attendues : date ; libellé ; référence ; crédit ; débit. "
+            "Séparateur , ; ou tabulation — dates jj/mm/aaaa ou aaaa-mm-jj. "
+            "Seules les lignes CRÉDIT (encaissements) sont rapprochées."
+        ),
+        widget=forms.ClearableFileInput(
+            attrs={"class": "input", "accept": ".csv,text/csv,text/plain"}
+        ),
+    )
+
+    def clean_statement(self):
+        f = self.cleaned_data["statement"]
+        if f.size > 5 * 1024 * 1024:
+            raise forms.ValidationError("Fichier trop volumineux (max 5 Mo).")
+        name = (f.name or "").lower()
+        if not (name.endswith(".csv") or name.endswith(".txt") or f.content_type in ("text/csv", "text/plain")):
+            raise forms.ValidationError("Format attendu : fichier CSV (.csv).")
+        return f

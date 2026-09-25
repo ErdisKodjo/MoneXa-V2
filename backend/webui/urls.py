@@ -60,6 +60,8 @@ urlpatterns = [
     path("assistant/", views.AssistantView.as_view(), name="assistant"),
     # Exports
     path("exports/", views.ExportsView.as_view(), name="exports"),
+    # Banque — rapprochement multi-comptes (relevé CSV)
+    path("banque/", views.BankImportView.as_view(), name="bank"),
     path("exports/paiements.csv", views.PaymentExportView.as_view(), name="export_payments"),
     path("exports/depenses.csv", views.ExpenseExportView.as_view(), name="export_expenses"),
     path(

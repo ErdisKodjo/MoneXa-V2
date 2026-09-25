@@ -169,3 +169,46 @@ Livraison du 2026-09-25, en amont de la démo : les axes court terme (P1) et moy
 - **67 tests pytest verts** (dont 27 nouveaux : parser SMS, fraude, passerelles sandbox,
   webhook HMAC, 2FA TOTP, rappels, PDF, saisonnalité) ; smoke web 23/23 + **14/14 v2.1**.
 - Guide de démonstration complet : [`docs/DEMO.md`](DEMO.md).
+
+---
+
+## 8. V2.2/V2.3 — Exploration post-prompt hackathon (réalisées)
+
+Livraison du 2026-09-26, à J-1 de la démo : audit croisé du prompt D3BUG 0R DI3
+et du code, puis implémentation des derniers manquants.
+
+### TresorIA LLM réel (V2.2)
+- `assistant/services.py` : `_call_llm_cfo` (OpenAI gpt-4o-mini → Gemini Flash),
+  `_serialize_kpis` / `_build_llm_prompt` — les 15 KPIs pré-calculés sont
+  **injectés dans le prompt, jamais de SQL, jamais d'accès DB** (§12.1).
+- Fallback automatique sur le moteur de règles (déterministe, hors-ligne) ;
+  garde pytest ; settings `TREASORIA_USE_LLM` / `TREASORIA_LLM_TIMEOUT`.
+
+### Script vidéo secours 60 s (V2.2)
+- `docs/VIDEO_SECOURS.md` : storyboard seconde par seconde, voice-over FR,
+  checklist tournage OBS, plan B diffusion (USB + téléphone + cloud).
+
+### Écran mobile TresorIA + saisie vocale (V2.3)
+- `features/assistant/` : chat CFO dans la poche (5e onglet), bulles, loader
+  « TresorIA analyse… », suggestions de questions, dégradation gracieuse sans
+  micro. `speech_to_text` pour poser la question à la voix (FR/EE/Kabyé selon
+  la locale du téléphone) ; permission `RECORD_AUDIO` ; test widget.
+
+### PWA installable interface web (V2.3)
+- `backend/static/manifest.webmanifest` (thème #063082, icônes générées depuis
+  le logo) + meta theme-color / apple-touch-icon dans `base.html`.
+
+### Rapprochement bancaire multi-comptes (V2.3)
+- `finance/services/bank_reconcile.py` : parsing CSV souple (délimiteur,
+  dates FR/ISO, montants FR/EN, en-têtes aliassés ou positionnel), ligne
+  crédit → Payment canal BANQUE + cascade de matching ; **idempotent**
+  (provider_ref `BQ-…` unique). Rapport détaillé (réf / montant / fuzzy /
+  non rattachés / doublons / débits ignorés).
+- Matcher niveau 1 étendu : la référence facture est cherchée dans
+  `provider_ref` **et le libellé** (« VIREMENT FACT-2026-0012 … »).
+- Page web **Banque** (`/banque/`, Comptable+) + commande
+  `manage.py import_bank_statement` + exemple `docs/exemple_releve_bancaire.csv`.
+
+### Vérification
+- **80 tests pytest verts** (9 nouveaux : parsing, idempotence, matching
+  référence bancaire, hash stable, non rattaché).

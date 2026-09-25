@@ -60,24 +60,31 @@ Transfert recu de AFI Adjovi (94123456). Montant: 10 000 FCFA. ID Transaction: M
 - Dashboard → prévision Holt-Winters J+7/J+30 avec intervalle 80 %.
 - **Saisonnalité jours de marché** : `MARKET_DAYS=5` (samedi) booste les jours de grand marché, uplift calibré sur l'historique réel (ratio moyenne du jour / moyenne globale, borné [0.5, 2.0]).
 
-## 7. TresorIA & Exports
-- **TresorIA** : questions en langage naturel sur les KPIs (jamais de SQL libre).
-- **Exports** : CSV (Excel/SYSCOHADA) + **PDF présentables** : journal de caisse, bilan de trésorerie 30/90 jours (totaux, encaissements par canal, dépenses par catégorie).
+## 7. Rapprochement bancaire multi-comptes (Comptable+)
+1. **Banque** → importer le relevé CSV (ex. `docs/exemple_releve_bancaire.csv`).
+2. MoneXa rapproche chaque virement automatiquement : référence facture dans le libellé → réconcilié ; montant+7j ou similarité → À VALIDER ; le reste → NON_RATTACHE. Idempotent (ré-importer ne crée aucun doublon).
+3. CLI équivalente : `python manage.py import_bank_statement docs/exemple_releve_bancaire.csv`.
 
-## 8. App mobile (Flutter)
-- PWA installable (manifest MoneXa) + APK : `bash mobile_app/build_apk.sh` (machine avec Flutter 3.22).
+## 8. TresorIA & Exports
+- **TresorIA** : questions en langage naturel sur les KPIs (jamais de SQL libre) — LLM réel si clé API, sinon moteur de règles hors-ligne.
+- **TresorIA mobile** : nouvel écran Flutter (5e onglet) avec **saisie vocale** (micro) — FR / Ewé / Kabyé.
+- **Exports** : CSV (Excel/SYSCOHADA) + **PDF présentables** : journal de caisse, bilan de trésorerie 30/90 jours.
+
+## 9. App mobile (Flutter)
+- PWA installable (manifest MoneXa sur le web ET sur l'interface Django) + APK : `bash mobile_app/build_apk.sh`.
+- **5 onglets** : Accueil, Reçu (IA), Paiements, TresorIA (vocal), Profil.
 - **File de sync offline** : un reçu photographié sans réseau est stocké dans Hive et renvoyé automatiquement au démarrage/retour au premier plan — jamais de perte de preuve.
 - Trilingue FR / Ewé / Kabyé.
 
-## 9. Points techniques à citer au jury
+## 10. Points techniques à citer au jury
 - `DecimalField(14,2)` partout, `provider_ref` UNIQUE au niveau DB (anti-doublon natif).
 - Audit immuable : hash-chain SHA-256, `save()`/`delete()` verrouillés, `verify_chain()` en direct sur la page Audit.
 - RBAC 3 niveaux cohérent côté API (DRF permissions) et côté web (mixins).
-- Tests : **71 tests pytest verts**, smoke tests web 23 + 14 vérifiés.
+- Tests : **80 tests pytest verts**, smoke tests web 23 + 14 vérifiés.
 - PostgreSQL via `DATABASE_URL` (docker-compose fourni) ; SQLite fallback tests.
 - TresorIA : LLM réel (GPT-4o-mini / Gemini) si clé API — KPIs pré-calculés injectés dans le prompt, **jamais de SQL, jamais d'accès DB** ; sinon moteur de règles déterministe 100 % hors-ligne (variable `TREASORIA_USE_LLM=0` pour forcer les règles).
 
-## 10. Plan B — vidéo secours 60 s
+## 11. Plan B — vidéo secours 60 s
 - Script complet (storyboard seconde par seconde + voice-over + checklist de tournage) : **`docs/VIDEO_SECOURS.md`**.
 - À tourner aujourd'hui, 2 copies physiques (clé USB + téléphone) + 1 lien cloud testé.
 - À montrer UNIQUEMENT si la démo live est impossible (connexion, projector, Render down).

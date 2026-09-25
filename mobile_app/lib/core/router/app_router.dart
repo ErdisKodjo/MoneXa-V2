@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/assistant/presentation/screens/assistant_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/payments/presentation/screens/payments_screen.dart';
@@ -33,6 +34,7 @@ GoRouter createRouter(AuthBloc authBloc) {
           GoRoute(path: '/dashboard', builder: (context, state) => const DashboardScreen()),
           GoRoute(path: '/upload', builder: (context, state) => const UploadEvidenceScreen()),
           GoRoute(path: '/payments', builder: (context, state) => const PaymentsScreen()),
+          GoRoute(path: '/assistant', builder: (context, state) => const AssistantScreen()),
           GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
         ],
       ),

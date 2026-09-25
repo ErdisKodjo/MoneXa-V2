@@ -38,6 +38,9 @@ dependencies:
   # Image picker
   image_picker: ^1.1.2
 
+  # Saisie vocale (TresorIA — FR / Ewé / Kabyé selon locale du téléphone)
+  speech_to_text: ^6.6.2
+
   # Utilities
   cached_network_image: ^3.4.1
 

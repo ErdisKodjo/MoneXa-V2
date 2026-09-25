@@ -1,0 +1,91 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Rapprochement bancaire" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Rapprochement bancaire" %}</h1>
+    <p class="page-sub">{% trans "Importez le relevé CSV de votre compte bancaire : MoneXa rapproche automatiquement chaque encaissement des factures impayées (référence, montant, similarité) et signale le reste. Idempotent : ré-importer le même relevé ne crée aucun doublon." %}</p>
+  </div>
+</div>
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Importer un relevé bancaire" %}</h2>
+    <span class="card-hint">{% trans "Comptable & Gérant" %}</span>
+  </header>
+  <form method="post" enctype="multipart/form-data" class="form-grid">
+    {% csrf_token %}
+    <div class="field">
+      <label for="{{ form.statement.id_for_label }}">{{ form.statement.label }}</label>
+      {{ form.statement }}
+      {% if form.statement.errors %}<p class="field-error">{{ form.statement.errors.0 }}</p>{% endif %}
+      <p class="card-hint">{{ form.statement.help_text }}</p>
+    </div>
+    <div class="field field-submit">
+      <button type="submit" class="btn btn-primary">{% trans "Analyser et rapprocher" %}</button>
+    </div>
+  </form>
+</section>
+
+{% if report %}
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Rapport de rapprochement" %}</h2>
+    <span class="card-hint">
+      {{ report.total_lines }} {% trans "ligne(s) crédit analysée(s)" %}
+      {% if report.debits_ignored %}· {{ report.debits_ignored }} {% trans "débit(s) ignoré(s)" %}{% endif %}
+    </span>
+  </header>
+  <div class="stats-grid" style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+    <span class="badge badge-success">{% trans "Importés" %} : {{ report.imported }}</span>
+    <span class="badge badge-info">{% trans "Par référence" %} : {{ report.matched_ref }}</span>
+    <span class="badge badge-warning">{% trans "Par montant/similarité" %} : {{ report.matched_amount }}</span>
+    <span class="badge badge-muted">{% trans "Non rattachés" %} : {{ report.non_rattaches }}</span>
+    <span class="badge badge-muted">{% trans "Doublons ignorés" %} : {{ report.skipped }}</span>
+  </div>
+  {% if report.errors %}
+  <ul class="card-hint" style="margin-bottom:1rem">
+    {% for e in report.errors %}<li>⚠ {{ e }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <div style="overflow-x:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "Référence MoneXa" %}</th>
+          <th>{% trans "Libellé banque" %}</th>
+          <th>{% trans "Montant" %}</th>
+          <th>{% trans "Résultat" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in details %}
+        <tr>
+          <td><code>{{ d.ref }}</code></td>
+          <td>{{ d.libelle|truncatechars:60 }}</td>
+          <td>{{ d.montant }} FCFA</td>
+          <td>{{ d.result }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Format du fichier attendu" %}</h2>
+  </header>
+  <p class="card-hint">
+    {% trans "En-têtes reconnus (ordre libre) : date, libellé/description, référence, crédit, débit — séparateur , ; ou tabulation, dates jj/mm/aaaa ou aaaa-mm-jj, montants FR (1 234 567,89) ou EN (1234567.89). Sans en-tête, l'ordre positionnel date ; libellé ; référence ; crédit est appliqué." %}
+  </p>
+  <pre style="background:#0F172A;color:#E2E8F0;padding:1rem;border-radius:12px;font-size:.85rem;overflow-x:auto">date;libelle;reference;credit;debit
+02/09/2026;VIREMENT RECU FACT-2026-0012 BTP PLUS;VIR20260902;150000;0
+05/09/2026;CHEQUE CLIENT AGNES BP;CHQ8891;87500;0
+06/09/2026;PAIEMENT LOYER SEPTEMBRE;PRLV-09;0;250000</pre>
+</section>
+{% endblock %}
