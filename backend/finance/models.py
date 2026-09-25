@@ -116,6 +116,11 @@ class Invoice(models.Model):
             models.Index(fields=["client_phone"]),
         ]
 
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            self.reference = self.generate_reference()
+        super().save(*args, **kwargs)
+
     def __str__(self) -> str:
         return f"{self.reference} — {self.client_name} ({self.amount:,.2f} FCFA)"
 

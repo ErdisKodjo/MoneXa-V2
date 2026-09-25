@@ -17,12 +17,16 @@ PRODUCTION MODE (OPENAI_API_KEY set):
 from __future__ import annotations
 import hashlib
 import io
+import logging
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
+
+logger = logging.getLogger("monexa.ai")
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -124,6 +128,170 @@ def _deterministic_mock(image_bytes: bytes) -> PaymentExtraction:
     )
 
 
+_VISION_PROMPT = """Tu extrais un reçu Mobile Money ouest-africain (T-Money, Moov Money, Flooz).
+Réponds UNIQUEMENT avec un JSON compact, sans markdown, avec exactement ces clés:
+{
+  "montant": 50000,
+  "reference": "TMX123456",
+  "operator": "TMONEY",
+  "emetteur": "Nom du payeur",
+  "telephone_emetteur": "+228 90 00 00 00",
+  "date_paiement": "2026-09-24T14:23:00+00:00"
+}
+operator doit être TMONEY, MOOV ou FLOOZ. montant > 0. date_paiement ISO-8601."""
+
+
+def _parse_llm_json(text: str) -> Optional[PaymentExtraction]:
+    """Best-effort parse of an LLM JSON payload into PaymentExtraction."""
+    import json
+    import re
+
+    if not text:
+        return None
+    cleaned = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+    if fenced:
+        cleaned = fenced.group(1)
+    else:
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start >= 0 and end > start:
+            cleaned = cleaned[start : end + 1]
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return None
+    try:
+        return PaymentExtraction.model_validate(payload)
+    except Exception:
+        return None
+
+
+def _mime_from_filename(filename: str) -> str:
+    name = (filename or "").lower()
+    if name.endswith(".png"):
+        return "image/png"
+    if name.endswith(".webp"):
+        return "image/webp"
+    if name.endswith(".gif"):
+        return "image/gif"
+    return "image/jpeg"
+
+
+def _call_openai_vision(image_bytes: bytes, filename: str, api_key: str) -> Optional[PaymentExtraction]:
+    import base64
+    import json
+    import urllib.error
+    import urllib.request
+
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    mime = _mime_from_filename(filename)
+    body = {
+        "model": _setting("OPENAI_VISION_MODEL", os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")),
+        "temperature": 0,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": _VISION_PROMPT},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{b64}"},
+                    },
+                ],
+            }
+        ],
+    }
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        content = data["choices"][0]["message"]["content"]
+        return _parse_llm_json(content)
+    except (urllib.error.URLError, KeyError, IndexError, TimeoutError, ValueError):
+        return None
+
+
+def _call_gemini_vision(image_bytes: bytes, filename: str, api_key: str) -> Optional[PaymentExtraction]:
+    import base64
+    import json
+    import urllib.error
+    import urllib.request
+
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    mime = _mime_from_filename(filename)
+    model = _setting("GEMINI_VISION_MODEL", os.environ.get("GEMINI_VISION_MODEL", "gemini-2.0-flash"))
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent?key={api_key}"
+    )
+    body = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": _VISION_PROMPT},
+                    {"inline_data": {"mime_type": mime, "data": b64}},
+                ]
+            }
+        ]
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        content = data["candidates"][0]["content"]["parts"][0]["text"]
+        return _parse_llm_json(content)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:400]
+        logger.warning("Gemini Vision HTTP %s: %s", e.code, body)
+        return None
+    except (urllib.error.URLError, KeyError, IndexError, TimeoutError, ValueError) as e:
+        logger.warning("Gemini Vision fallback mock: %s", e)
+        return None
+
+
+def _setting(name: str, default: str = "") -> str:
+    """Read from Django settings (.env) then process env."""
+    try:
+        from django.conf import settings
+        value = getattr(settings, name, None)
+        if value:
+            return str(value)
+    except Exception:
+        pass
+    return os.environ.get(name, default) or default
+
+
+def _try_real_vision(image_bytes: bytes, filename: str) -> Optional[PaymentExtraction]:
+    """Call Gemini Flash or GPT-4o-mini if a key is present. Never raise."""
+    # Keep pytest deterministic (mock). Runserver / Docker still use the real API.
+    if "pytest" in sys.modules and not os.environ.get("FORCE_REAL_VISION"):
+        return None
+    gemini_key = _setting("GEMINI_API_KEY")
+    openai_key = _setting("OPENAI_API_KEY")
+    if gemini_key.strip():
+        extracted = _call_gemini_vision(image_bytes, filename, gemini_key.strip())
+        if extracted:
+            return extracted
+    if openai_key.strip():
+        extracted = _call_openai_vision(image_bytes, filename, openai_key.strip())
+        if extracted:
+            return extracted
+    return None
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────────────────────────────────
@@ -131,46 +299,22 @@ def extract_payment_from_image(image_bytes: bytes, filename: str = "") -> dict:
     """
     Extract payment data from an image of a Mobile Money SMS / receipt.
 
-    Args:
-        image_bytes: raw bytes of the uploaded image
-        filename: original filename (for logging)
-
-    Returns:
-        dict with keys:
-            - montant: Decimal
-            - reference: str
-            - operator: str
-            - emetteur: str
-            - telephone_emetteur: str | None
-            - date_paiement: datetime
-            - ai_confidence: float (0..1)
-            - raw_text: str (extracted text for audit)
-            - extraction: PaymentExtraction (the validated Pydantic instance)
+    Uses GPT-4o-mini Vision or Gemini Flash when an API key is set.
+    Falls back automatically to a deterministic mock (offline / tests / errors).
     """
-    # Always start from the deterministic mock (so we have a baseline)
-    extraction = _deterministic_mock(image_bytes)
+    extraction = _try_real_vision(image_bytes, filename)
+    used_llm = extraction is not None
+    if extraction is None:
+        extraction = _deterministic_mock(image_bytes)
 
-    # If an OpenAI/Gemini API key is set, try the real call (best-effort)
-    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    confidence = 0.85  # default mock confidence
+    confidence = 0.97 if used_llm else 0.85
+    tag = "LLM VISION" if used_llm else "DEMO"
     raw_text = (
-        f"[DEMO] Paiement reçu de {extraction.emetteur} "
+        f"[{tag}] Paiement reçu de {extraction.emetteur} "
         f"({extraction.telephone_emetteur or 'n/a'}), "
         f"montant {extraction.montant} FCFA via {extraction.operator}. "
         f"Réf: {extraction.reference}. Date: {extraction.date_paiement:%Y-%m-%d %H:%M}."
     )
-
-    if api_key:
-        # Production path would call openai.ChatCompletion.create with vision.
-        # We don't actually call it here — the mock is the demo fallback.
-        # In real use, replace this block with a real API call and fall back on error.
-        confidence = 0.97
-        raw_text = (
-            f"[LLM VISION] Paiement reçu de {extraction.emetteur} "
-            f"({extraction.telephone_emetteur or 'n/a'}), "
-            f"montant {extraction.montant} FCFA via {extraction.operator}. "
-            f"Réf: {extraction.reference}. Date: {extraction.date_paiement:%Y-%m-%d %H:%M}."
-        )
 
     return {
         "montant": extraction.montant,

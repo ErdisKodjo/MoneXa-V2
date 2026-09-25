@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
     "corsheaders",
+    "django_filters",
     "django_otp",
     "django_otp.plugins.otp_totp",
 
@@ -200,9 +201,18 @@ SIMPLE_JWT = {
 # ──────────────────────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = config(
     "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:8080,http://127.0.0.1:8080",
+    default="http://localhost:8080,http://127.0.0.1:8080,http://localhost:8000,http://127.0.0.1:8000",
     cast=Csv(),
 )
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+# ──────────────────────────────────────────────────────────────────────────
+# IA — Gemini / OpenAI Vision (optionnel)
+# ──────────────────────────────────────────────────────────────────────────
+OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+GEMINI_VISION_MODEL = config("GEMINI_VISION_MODEL", default="gemini-2.0-flash")
+OPENAI_VISION_MODEL = config("OPENAI_VISION_MODEL", default="gpt-4o-mini")
 
 # ──────────────────────────────────────────────────────────────────────────
 # Logging
@@ -221,5 +231,6 @@ LOGGING = {
     },
     "loggers": {
         "monexa": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "monexa.ai": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }

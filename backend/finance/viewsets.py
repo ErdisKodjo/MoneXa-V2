@@ -228,7 +228,16 @@ class PaymentViewSet(viewsets.ModelViewSet):
         Body: {"decision": "RECONCILIE" | "ANOMALIE"}
         """
         payment = self.get_object()
-        decision = request.data.get("decision", "RECONCILIE").upper()
+        decision = (
+            request.data.get("decision")
+            or request.data.get("action")
+            or "RECONCILIE"
+        )
+        decision = str(decision).upper()
+        if decision in ("APPROVE", "VALIDER", "RECONCILIE"):
+            decision = "RECONCILIE"
+        elif decision in ("REJECT", "REJET", "ANOMALIE", "NON_RATTACHE"):
+            decision = "ANOMALIE"
         if decision not in ("RECONCILIE", "ANOMALIE"):
             return Response(
                 {"detail": "decision doit être RECONCILIE ou ANOMALIE."},

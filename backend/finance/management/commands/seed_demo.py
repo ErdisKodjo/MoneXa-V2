@@ -77,6 +77,13 @@ class Command(BaseCommand):
             ForecastCache.objects.all().delete()
             User.objects.exclude(is_superuser=True).delete()
 
+        already_seeded = User.objects.filter(email="gerant@monexa.tg").exists() and Invoice.objects.exists()
+        if already_seeded and not reset:
+            self.stdout.write(self.style.WARNING(
+                "Données de démo déjà présentes — skip. Relancer avec --reset pour tout régénérer."
+            ))
+            return
+
         rng = random.Random(42)  # reproductible
 
         # ── Utilisateurs ────────────────────────────────────────────
