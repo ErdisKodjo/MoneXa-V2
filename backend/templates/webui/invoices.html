@@ -1,0 +1,100 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Factures" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Factures" %}</h1>
+    <p class="page-sub">{% trans "Émissions client et suivi des rapprochements — référence générée automatiquement." %}</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'invoice_create' %}">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+    {% trans "Nouvelle facture" %}
+  </a>
+</div>
+
+<div class="chip-row">
+  <a class="chip {% if not current_status %}chip-active{% endif %}" href="{% url 'invoices' %}">{% trans "Toutes" %}</a>
+  <a class="chip {% if current_status == 'EN_ATTENTE' %}chip-active{% endif %}" href="?status=EN_ATTENTE">{% trans "En attente" %} <span class="chip-count">{{ status_counts.EN_ATTENTE }}</span></a>
+  <a class="chip {% if current_status == 'RECONCILIE' %}chip-active{% endif %}" href="?status=RECONCILIE">{% trans "Réconciliées" %} <span class="chip-count">{{ status_counts.RECONCILIE }}</span></a>
+  <a class="chip {% if current_status == 'ANOMALIE' %}chip-active{% endif %}" href="?status=ANOMALIE">{% trans "Anomalies" %} <span class="chip-count">{{ status_counts.ANOMALIE }}</span></a>
+  <a class="chip {% if current_status == 'ANNULE' %}chip-active{% endif %}" href="?status=ANNULE">{% trans "Annulées" %} <span class="chip-count">{{ status_counts.ANNULE }}</span></a>
+</div>
+
+<form class="filter-form" method="get" action="{% url 'invoices' %}">
+  <div class="filter-field">
+    <label class="visually-hidden" for="filterStatus">{% trans "Statut" %}</label>
+    <select id="filterStatus" name="status" class="input">
+      <option value="">{% trans "Tous les statuts" %}</option>
+      {% for code, label in status_choices %}
+      <option value="{{ code }}" {% if code == current_status %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-field filter-grow">
+    <label class="visually-hidden" for="filterQ">{% trans "Recherche" %}</label>
+    <input id="filterQ" type="search" name="q" class="input" value="{{ current_q }}" placeholder="{% trans 'Référence, client, téléphone…' %}">
+  </div>
+  <button type="submit" class="btn btn-primary">{% trans "Filtrer" %}</button>
+  <a class="btn btn-ghost" href="{% url 'invoices' %}">{% trans "Réinitialiser" %}</a>
+</form>
+
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table table-responsive">
+      <thead>
+        <tr>
+          <th>{% trans "Référence" %}</th>
+          <th>{% trans "Client" %}</th>
+          <th class="th-num">{% trans "Montant" %}</th>
+          <th>{% trans "Émission" %}</th>
+          <th>{% trans "Échéance" %}</th>
+          <th>{% trans "Statut" %}</th>
+          <th>{% trans "Créée par" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr>
+          <td data-label="Référence"><span class="mono td-strong">{{ inv.reference }}</span></td>
+          <td data-label="Client">{{ inv.client_name }}{% if inv.client_phone %}<span class="cell-sub">{{ inv.client_phone }}</span>{% endif %}</td>
+          <td data-label="Montant" class="td-num td-strong">{{ inv.amount|floatformat:0 }} FCFA</td>
+          <td data-label="Émission">{{ inv.issue_date|date:"d/m/Y" }}</td>
+          <td data-label="Échéance">{{ inv.due_date|date:"d/m/Y" }}</td>
+          <td data-label="Statut">
+            <span class="badge {% if inv.status == 'RECONCILIE' %}badge-success{% elif inv.status == 'ANOMALIE' %}badge-danger{% elif inv.status == 'EN_ATTENTE' %}badge-warning{% else %}badge-muted{% endif %}">{{ inv.get_status_display }}</span>
+          </td>
+          <td data-label="Créée par">{{ inv.created_by.display_name }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty-state">{% trans "Aucune facture ne correspond aux filtres." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_previous or page_obj.has_next %}
+  <nav class="pagination" aria-label="Pagination factures">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      {% trans "Précédent" %}
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm is-disabled">{% trans "Précédent" %}</span>
+    {% endif %}
+    <span class="page-info">{% trans "Page" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}">
+      {% trans "Suivant" %}
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm is-disabled">{% trans "Suivant" %}</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

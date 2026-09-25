@@ -1,0 +1,74 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}TresorIA{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "TresorIA — Votre CFO virtuel" %}</h1>
+    <p class="page-sub">{% trans "Réponses basées sur 15 KPIs pré-calculés. Jamais d'accès direct à la base." %}</p>
+  </div>
+</div>
+
+<div class="card chat-shell">
+  <div class="chat-scroll">
+    {% if history %}
+      {% for m in history %}
+        {% if m.role == "user" %}
+        <div class="chat-row chat-row-user">
+          <div class="chat-bubble chat-bubble-user">{{ m.text }}</div>
+        </div>
+        {% else %}
+        <div class="chat-row chat-row-bot">
+          <span class="chat-avatar" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>
+          </span>
+          <div class="chat-bubble chat-bubble-bot">{{ m.text }}</div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      <div class="chat-welcome">
+        <p class="chat-welcome-title">{% trans "Bonjour, je suis TresorIA." %}</p>
+        <p class="chat-welcome-text">{% trans "Posez-moi une question sur votre trésorerie, ou choisissez une suggestion :" %}</p>
+        <div class="suggestion-grid">
+          <button type="button" class="suggestion" data-q="Quel est mon solde T-Money ?">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7H5a2 2 0 0 1 0-4h14v4z"/><path d="M21 7v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/></svg>
+            {% trans "Quel est mon solde T-Money ?" %}
+          </button>
+          <button type="button" class="suggestion" data-q="Quelle est ma trésorerie à 30 jours ?">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 7l-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>
+            {% trans "Quelle est ma trésorerie à 30 jours ?" %}
+          </button>
+          <button type="button" class="suggestion" data-q="Combien d'anomalies ?">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            {% trans "Combien d'anomalies ?" %}
+          </button>
+          <button type="button" class="suggestion" data-q="Quelles factures sont en retard ?">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/></svg>
+            {% trans "Quelles factures sont en retard ?" %}
+          </button>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <form class="chat-form" method="post" action="{% url 'assistant' %}">
+    {% csrf_token %}
+    <label class="visually-hidden" for="{{ form.question.id_for_label }}">{{ form.question.label }}</label>
+    {{ form.question }}
+    <button type="submit" class="btn btn-primary">{% trans "Demander" %}</button>
+  </form>
+</div>
+
+<script>
+function mxFill(q) {
+  var input = document.getElementById('{{ form.question.id_for_label }}');
+  if (input) { input.value = q; input.focus(); }
+}
+document.querySelectorAll('.suggestion').forEach(function (b) {
+  b.addEventListener('click', function () { mxFill(b.dataset.q); });
+});
+</script>
+{% endblock %}

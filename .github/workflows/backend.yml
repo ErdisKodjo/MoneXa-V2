@@ -1,0 +1,51 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Django system check
+        run: python manage.py check
+        env:
+          SECRET_KEY: ci-test-key-not-for-production
+          DEBUG: "True"
+
+      - name: Migrations check (aucune migration manquante)
+        run: python manage.py makemigrations --check --dry-run
+        env:
+          SECRET_KEY: ci-test-key-not-for-production
+          DEBUG: "True"
+
+      - name: Run pytest (40 tests — RBAC, audit, matcher, IA, KPIs)
+        run: pytest -q
+        env:
+          SECRET_KEY: ci-test-key-not-for-production
+          DEBUG: "True"

@@ -1,0 +1,66 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Nouvelle facture" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Nouvelle facture" %}</h1>
+    <p class="page-sub">{% trans "Émettez une facture client — le rapprochement Mobile Money sera automatique." %}</p>
+  </div>
+</div>
+
+<div class="form-shell">
+  <form method="post" class="card form-card">
+    {% csrf_token %}
+    <p class="form-hint mono">{% trans "Prochaine référence :" %} {{ next_reference }}</p>
+
+    {% if form.non_field_errors %}
+    <div class="login-alert" role="alert">
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field span-2">
+        <label class="field-label" for="{{ form.client_name.id_for_label }}">{{ form.client_name.label }}</label>
+        {{ form.client_name }}
+        {% for error in form.client_name.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="{{ form.client_phone.id_for_label }}">{{ form.client_phone.label }}</label>
+        {{ form.client_phone }}
+        {% for error in form.client_phone.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>
+        {{ form.amount }}
+        {% for error in form.amount.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="{{ form.issue_date.id_for_label }}">{{ form.issue_date.label }}</label>
+        {{ form.issue_date }}
+        {% for error in form.issue_date.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="{{ form.due_date.id_for_label }}">{{ form.due_date.label }}</label>
+        {{ form.due_date }}
+        {% for error in form.due_date.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a class="btn btn-ghost" href="{% url 'invoices' %}">{% trans "Annuler" %}</a>
+      <button type="submit" class="btn btn-primary">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+        {% trans "Enregistrer" %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

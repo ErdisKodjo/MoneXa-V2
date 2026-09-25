@@ -1,0 +1,40 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Connexion" %}{% endblock %}
+
+{% block layout %}
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-brand">
+      <span class="brand-badge brand-badge-lg" aria-hidden="true">M</span>
+      <h1 class="login-logo">Mone<span class="brand-accent">X</span>a</h1>
+      <p class="login-tagline">{% trans "CFO virtuel pour PME ouest-africaines" %}</p>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="login-alert" role="alert">
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="field">
+        <label class="field-label" for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
+        {{ form.username }}
+        {% for error in form.username.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+      <div class="field">
+        <label class="field-label" for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
+        {{ form.password }}
+        {% for error in form.password.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">{% trans "Se connecter" %}</button>
+    </form>
+
+    <p class="login-footnote">{% trans "Accès sécurisé — sessions chiffrées et journal d'audit immuable SHA-256." %}</p>
+  </div>
+  <p class="login-copyright">MoneXa · ESIG Tech Arena 2026 — {% trans "Défi 2" %}</p>
+</div>
+{% endblock %}

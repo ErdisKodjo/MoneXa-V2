@@ -1,0 +1,97 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Journal d'audit" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Journal d'audit" %}</h1>
+    <p class="page-sub">{% trans "Journal immuable chaîné SHA-256 — toute altération casse la chaîne." %}</p>
+  </div>
+</div>
+
+{% if chain_valid %}
+<div class="alert-banner alert-success">
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+  <p>{% trans "Chaîne d'intégrité vérifiée — 0 entrée altérée." %}</p>
+</div>
+{% else %}
+<div class="alert-banner alert-danger" role="alert">
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+  <p>{% trans "Chaîne BRISÉE — entrées :" %} {{ broken_ids|join:", " }}</p>
+</div>
+{% endif %}
+
+<form class="filter-form" method="get" action="{% url 'audit' %}">
+  <div class="filter-field">
+    <label class="visually-hidden" for="filterAction">{% trans "Action" %}</label>
+    <select id="filterAction" name="action" class="input">
+      <option value="">{% trans "Toutes les actions" %}</option>
+      {% for a in actions %}
+      <option value="{{ a }}" {% if a == current_action %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary">{% trans "Filtrer" %}</button>
+  <a class="btn btn-ghost" href="{% url 'audit' %}">{% trans "Réinitialiser" %}</a>
+</form>
+
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table table-responsive">
+      <thead>
+        <tr>
+          <th>{% trans "Horodatage" %}</th>
+          <th>{% trans "Utilisateur" %}</th>
+          <th>{% trans "Action" %}</th>
+          <th>{% trans "Entité" %}</th>
+          <th>{% trans "Détails" %}</th>
+          <th>{% trans "Empreinte SHA-256" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td data-label="Horodatage">{{ log.timestamp|date:"d/m/Y H:i" }}</td>
+          <td data-label="Utilisateur">
+            {% if log.user %}
+            {{ log.user.display_name }}
+            {% if log.ip_address %}<span class="cell-sub">{{ log.ip_address }}</span>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td data-label="Action"><span class="badge badge-neutral">{{ log.action }}</span></td>
+          <td data-label="Entité"><span class="mono">{{ log.entity }}:{{ log.entity_id }}</span></td>
+          <td data-label="Détails"><span class="mono cell-details">{{ log.details }}</span></td>
+          <td data-label="Empreinte"><span class="mono hash">{{ log.hash|slice:":16" }}…</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="empty-state">{% trans "Aucune entrée dans le journal pour ce filtre." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_previous or page_obj.has_next %}
+  <nav class="pagination" aria-label="Pagination journal d'audit">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      {% trans "Précédent" %}
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm is-disabled">{% trans "Précédent" %}</span>
+    {% endif %}
+    <span class="page-info">{% trans "Page" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}">
+      {% trans "Suivant" %}
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm is-disabled">{% trans "Suivant" %}</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

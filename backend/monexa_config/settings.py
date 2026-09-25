@@ -47,11 +47,13 @@ INSTALLED_APPS = [
     "auditing",
     "reporting",
     "assistant",
+    "webui",  # Couche MVT fonctionnelle (vues render + templates + forms)
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Static files en prod (pas de nginx requis)
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -62,6 +64,11 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "monexa_config.urls"
+
+# Auth web MVT (sessions) — redirections login/logout
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
+LOGOUT_REDIRECT_URL = "/login/"
 WSGI_APPLICATION = "monexa_config.wsgi.application"
 ASGI_APPLICATION = "monexa_config.asgi.application"
 
@@ -131,6 +138,11 @@ LOCALE_PATHS = [BASE_DIR / "locale"]
 # ──────────────────────────────────────────────────────────────────────────
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]  # CSS design system webui (css/monexa.css)
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 

@@ -4,6 +4,10 @@
 
 **Plateforme intelligente de trésorerie** : extraction IA des reçus Mobile Money, réconciliation automatique, audit immuable SHA-256, chatbot TresorIA.
 
+> **V2 — Django MVT fonctionnel et non démo** : une interface web complète rendue côté serveur
+> (9 écrans : login, dashboard KPIs, factures, paiements, dépenses, anomalies, audit immuable,
+> TresorIA, exports) complète l'API REST et l'app mobile. Voir [`docs/ANALYSE_V2.md`](docs/ANALYSE_V2.md).
+
 Hackathon **ESIG Tech Arena 2026** — Défi 2 (Application Mobile) — 25 au 27 septembre 2026
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://python.org)
@@ -11,6 +15,8 @@ Hackathon **ESIG Tech Arena 2026** — Défi 2 (Application Mobile) — 25 au 27
 [![DRF](https://img.shields.io/badge/DRF-3.15-A30000?logo=django&logoColor=white)](https://django-rest-framework.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Flutter](https://img.shields.io/badge/Flutter-3.22-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Backend CI](https://github.com/ErdisKodjo/MoneXa-V2/actions/workflows/backend.yml/badge.svg)](https://github.com/ErdisKodjo/MoneXa-V2/actions/workflows/backend.yml)
+[![Mobile CI](https://github.com/ErdisKodjo/MoneXa-V2/actions/workflows/mobile.yml/badge.svg)](https://github.com/ErdisKodjo/MoneXa-V2/actions/workflows/mobile.yml)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
@@ -73,14 +79,12 @@ En Afrique de l'Ouest, les PME réalisent l'essentiel de leurs encaissements via
 ## 📁 Structure du dépôt
 
 ```
-DEBUG/
+MoneXa-V2/
 ├── README.md                       # Ce fichier
-├── ESIG_Tech_Arena_2026_Cahier_des_charges.pdf
-├── code couleur.jpeg               # Charte couleur MoneXa
-├── .gitignore
 ├── docker-compose.yml              # Django + PostgreSQL
+├── .github/workflows/              # CI : backend (pytest) + mobile (analyze/test)
 │
-├── backend/                        # Backend Django + DRF
+├── backend/                        # Backend Django + DRF + MVT
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   ├── .env.example
@@ -93,6 +97,9 @@ DEBUG/
 │   ├── auditing/                   # AuditLog immuable SHA-256
 │   ├── reporting/                  # KPIs, exports, dashboard
 │   ├── assistant/                  # TresorIA chatbot
+│   ├── webui/                      # V2 — couche MVT (views, forms, urls, mixins RBAC)
+│   ├── templates/webui/            # V2 — 12 templates (login, dashboard, paiements…)
+│   ├── static/css/monexa.css       # V2 — design system MoneXa (charte officielle)
 │   └── docs/                       # (placeholder)
 │
 ├── mobile_app/                     # App Flutter (Clean Architecture + BLoC)
@@ -106,6 +113,7 @@ DEBUG/
 │       └── shared/                 # widgets, utils
 │
 └── docs/                           # Documentation projet
+    ├── ANALYSE_V2.md               # V2 — audit complet + axes d'amélioration
     ├── architecture.md
     ├── rbac-matrix.md
     ├── design-system.md
@@ -133,10 +141,10 @@ DEBUG/
 Voir [`docs/architecture.md`](docs/architecture.md) pour le diagramme complet.
 
 ```
-[Clients : Flutter mobile + Django Admin] 
-        │ JWT / Session
+[Clients : App web MVT (desktop) + Flutter mobile + Django Admin] 
+        │ Session (CSRF) / JWT / Session
         ▼
-[Django 5 + DRF]  ── [Services IA internes : ai_pipeline, matcher, anomalies, forecast]
+[Django 4.2 LTS + DRF + WebUI MVT]  ── [Services IA internes : ai_pipeline, matcher, anomalies, forecast]
         │                              └── [Audit immuable SHA-256]
         ▼
 [PostgreSQL 16 ACID]
@@ -144,8 +152,22 @@ Voir [`docs/architecture.md`](docs/architecture.md) pour le diagramme complet.
 
 3 décisions structurantes dès H0 :
 1. Custom User AVANT la première migration (règle n°1 Django)
-2. Mode API pur DRF, Django Admin conservé comme back-office
+2. API pur DRF **+ couche MVT web fonctionnelle (V2)**, Django Admin conservé comme back-office technique
 3. Services IA internes (pas de microservice séparé en 48h)
+
+### Écrans web MVT (V2)
+
+| Écran | Route | Rôle minimum |
+|---|---|---|
+| Connexion (sessions, CSRF) | `/login/` | public |
+| Dashboard KPIs + graphes CSS | `/dashboard/` | connecté |
+| Factures (liste, filtres, création) | `/factures/` | connecté (scoping caissier) |
+| Paiements (upload preuve IA, SMS, validation) | `/paiements/` | connecté (validation : comptable+) |
+| Dépenses (liste, création) | `/depenses/` | connecté (scoping caissier) |
+| Anomalies (règles + Isolation Forest) | `/anomalies/` | gérant |
+| Journal d'audit immuable + verify_chain | `/audit/` | gérant |
+| TresorIA chatbot | `/assistant/` | connecté |
+| Exports CSV | `/exports/` | comptable+ |
 
 ---
 
@@ -163,7 +185,8 @@ docker-compose exec backend python manage.py seed_demo
 ```
 
 Accès :
-- Backend : http://localhost:8000
+- **App web MVT** : http://localhost:8000 → redirige vers le login, puis le dashboard
+- Backend API : http://localhost:8000/api/
 - Swagger UI : http://localhost:8000/api/schema/swagger-ui/
 - Django Admin : http://localhost:8000/admin/
 
@@ -300,5 +323,5 @@ Projet réalisé pour l'**ESIG Tech Arena 2026** par l'équipe **MoneXa**.
 
 - **Défi** : Défi 2 — Application Mobile
 - **Contact** : `team.monexa@esig.example`
-- **Dépôt Git** : https://github.com/Mafrix07/DEBUG
+- **Dépôt Git** : https://github.com/ErdisKodjo/MoneXa-V2
 - **Cahier des charges** : `ESIG_Tech_Arena_2026_Cahier_des_charges.pdf` (32 pages, inclus dans ce dépôt)

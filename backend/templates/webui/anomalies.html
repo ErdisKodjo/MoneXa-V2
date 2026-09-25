@@ -1,0 +1,81 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Anomalies" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Centre d'anomalies" %}</h1>
+    <p class="page-sub">{% trans "Détection hybride — règles métier temps réel et scoring ML Isolation Forest." %}</p>
+  </div>
+</div>
+
+{% if total > 0 %}
+<div class="alert-banner alert-danger" role="alert">
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+  <p>{{ total }} {% trans "anomalie(s) détectée(s) — vérification requise." %}</p>
+</div>
+{% else %}
+<div class="alert-banner alert-success">
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+  <p>{% trans "Aucune anomalie détectée — tous les contrôles passent." %}</p>
+</div>
+{% endif %}
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      {% trans "Anomalies par règles" %}
+    </h2>
+    <span class="card-hint">{% trans "Contrôles déterministes appliqués à chaque paiement." %}</span>
+  </header>
+  {% for a in rule_based %}
+  <article class="anomaly-item">
+    <div class="anomaly-head">
+      <h3 class="anomaly-type">{{ a.type }}</h3>
+      <span class="badge {% if a.severity == 'critical' %}badge-danger{% elif a.severity == 'warning' %}badge-warning{% else %}badge-muted{% endif %}">{{ a.severity|upper }}</span>
+    </div>
+    <p class="anomaly-desc">{{ a.description }}</p>
+    <p class="anomaly-ref mono">{% trans "Paiement" %} #{{ a.payment.pk }} — {{ a.payment.provider_ref }} · {{ a.payment.amount|floatformat:0 }} FCFA · {{ a.payment.get_channel_display }}</p>
+  </article>
+  {% empty %}
+  <p class="empty-state">{% trans "Aucune anomalie détectée par les règles métier." %}</p>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>
+      {% trans "Score ML Isolation Forest" %}
+    </h2>
+    <span class="card-hint">{% trans "Historique 90 jours — paiements atypiques signalés au-delà de 0.70." %}</span>
+  </header>
+  {% if ml_flagged %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "Référence opérateur" %}</th>
+          <th class="th-num">{% trans "Score" %}</th>
+          <th>{% trans "État" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in ml_flagged %}
+        <tr>
+          <td class="mono td-strong">{{ item.provider_ref }}</td>
+          <td class="td-num"><span class="score-pill">{{ item.score|floatformat:2 }}</span></td>
+          <td><span class="badge badge-warning">{% trans "Signalé par le modèle" %}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">{% trans "Aucun paiement atypique détecté par le modèle sur la période." %}</p>
+  {% endif %}
+</section>
+{% endblock %}

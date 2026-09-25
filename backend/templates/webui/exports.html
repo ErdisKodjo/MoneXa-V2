@@ -1,0 +1,43 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Exports CSV" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Exports CSV" %}</h1>
+    <p class="page-sub">{% trans "Journaux comptables prêts pour Excel — encodage UTF-8, séparateur point-virgule, format SYSCOHADA simplifié." %}</p>
+  </div>
+</div>
+
+<div class="exports-grid">
+  <section class="card export-card">
+    <span class="kpi-icon kpi-icon-indigo">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
+    </span>
+    <h2 class="card-title">{% trans "Journal des paiements" %}</h2>
+    <p class="export-count"><strong>{{ nb_payments }}</strong> {% trans "paiements" %}</p>
+    <p class="export-desc">{% trans "Références opérateurs, canaux Mobile Money, payeurs, statuts de réconciliation, méthodes de matching et scores IA." %}</p>
+    <a class="btn btn-primary" href="{% url 'export_payments' %}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      {% trans "Télécharger CSV" %}
+    </a>
+  </section>
+
+  <section class="card export-card">
+    <span class="kpi-icon kpi-icon-gold">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2L6 3.5 4 2z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>
+    </span>
+    <h2 class="card-title">{% trans "Journal des dépenses" %}</h2>
+    <p class="export-count"><strong>{{ nb_expenses }}</strong> {% trans "dépenses" %}</p>
+    <p class="export-desc">{% trans "Fournisseurs, catégories SYSCOHADA, montants et dates de paiement — l'ensemble des flux sortants." %}</p>
+    <a class="btn btn-ghost" href="{% url 'export_expenses' %}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      {% trans "Télécharger CSV" %}
+    </a>
+  </section>
+</div>
+
+<p class="card-foot">{% trans "Le journal des factures compte" %} {{ nb_invoices }} {% trans "factures — rattachées aux paiements lors de la réconciliation." %}</p>
+{% endblock %}

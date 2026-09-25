@@ -18,5 +18,5 @@ COPY . .
 
 EXPOSE 8000
 
-# Default command: migrate + seed + run server
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_demo && python manage.py runserver 0.0.0.0:8000"]
+# Production-ready : migrate + seed + collectstatic + gunicorn (whitenoise sert le CSS MVT)
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_demo && python manage.py collectstatic --noinput --clear && gunicorn monexa_config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile -"]

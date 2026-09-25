@@ -1,6 +1,9 @@
 """
-URL configuration MoneXa — API REST + Django Admin + Swagger.
+URL configuration MoneXa — App web MVT (racine) + API REST + Django Admin + Swagger.
 """
+from django.conf import settings
+from django.conf.urls.i18n import i18n_patterns  # noqa: F401
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
@@ -41,9 +44,17 @@ router.register(r"payments", PaymentViewSet, basename="payment")
 router.register(r"expenses", ExpenseViewSet, basename="expense")
 
 urlpatterns = [
-    path("", RedirectView.as_view(url="/api/schema/swagger-ui/", permanent=False)),
+    # ── Racine → Application web MVT (fonctionnelle, non démo) ──────────
+    path("", RedirectView.as_view(url="/dashboard/", permanent=False)),
+
     # Admin
     path("admin/", admin.site.urls),
+
+    # ── Couche MVT web (sessions, templates, forms) ────────────────────
+    path("", include("webui.urls")),
+
+    # i18n — changement de langue (FR / Ewé / Kabyé)
+    path("i18n/", include("django.conf.urls.i18n")),
 
     # Auth
     path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
@@ -78,3 +89,7 @@ urlpatterns = [
         name="redoc",
     ),
 ]
+
+# Fichiers média (preuves de paiement) en développement
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

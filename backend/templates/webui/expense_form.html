@@ -1,0 +1,65 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Nouvelle dépense" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Nouvelle dépense" %}</h1>
+    <p class="page-sub">{% trans "Enregistrez un flux sortant — il alimente immédiatement les KPIs de trésorerie." %}</p>
+  </div>
+</div>
+
+<div class="form-shell">
+  <form method="post" class="card form-card">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+    <div class="login-alert" role="alert">
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+      <div class="field span-2">
+        <label class="field-label" for="{{ form.supplier.id_for_label }}">{{ form.supplier.label }}</label>
+        {{ form.supplier }}
+        {% for error in form.supplier.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+        {{ form.category }}
+        {% for error in form.category.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>
+        {{ form.amount }}
+        {% for error in form.amount.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+
+      <div class="field span-2">
+        <label class="field-label" for="{{ form.paid_at.id_for_label }}">{{ form.paid_at.label }}</label>
+        {{ form.paid_at }}
+        {% for error in form.paid_at.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+
+      <div class="field span-2">
+        <label class="field-label" for="{{ form.note.id_for_label }}">{{ form.note.label }}</label>
+        {{ form.note }}
+        {% for error in form.note.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a class="btn btn-ghost" href="{% url 'expenses' %}">{% trans "Annuler" %}</a>
+      <button type="submit" class="btn btn-primary">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+        {% trans "Enregistrer" %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

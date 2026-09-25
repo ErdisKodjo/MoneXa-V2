@@ -1,0 +1,87 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Dépenses" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Dépenses" %}</h1>
+    <p class="page-sub">{% trans "Flux sortants — fournisseurs, salaires, loyer et charges." %}</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'expense_create' %}">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+    {% trans "Nouvelle dépense" %}
+  </a>
+</div>
+
+<form class="filter-form" method="get" action="{% url 'expenses' %}">
+  <div class="filter-field">
+    <label class="visually-hidden" for="filterCategory">{% trans "Catégorie" %}</label>
+    <select id="filterCategory" name="category" class="input">
+      <option value="">{% trans "Toutes les catégories" %}</option>
+      <option value="LOYER" {% if current_category == 'LOYER' %}selected{% endif %}>{% trans "Loyer" %}</option>
+      <option value="SALAIRES" {% if current_category == 'SALAIRES' %}selected{% endif %}>{% trans "Salaires" %}</option>
+      <option value="FOURNISSEURS" {% if current_category == 'FOURNISSEURS' %}selected{% endif %}>{% trans "Fournisseurs" %}</option>
+      <option value="TRANSPORT" {% if current_category == 'TRANSPORT' %}selected{% endif %}>{% trans "Transport" %}</option>
+      <option value="FOURNITURES" {% if current_category == 'FOURNITURES' %}selected{% endif %}>{% trans "Fournitures" %}</option>
+      <option value="AUTRE" {% if current_category == 'AUTRE' %}selected{% endif %}>{% trans "Autre" %}</option>
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary">{% trans "Filtrer" %}</button>
+  <a class="btn btn-ghost" href="{% url 'expenses' %}">{% trans "Réinitialiser" %}</a>
+</form>
+
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table table-responsive">
+      <thead>
+        <tr>
+          <th>{% trans "Fournisseur" %}</th>
+          <th>{% trans "Catégorie" %}</th>
+          <th class="th-num">{% trans "Montant" %}</th>
+          <th>{% trans "Date" %}</th>
+          <th>{% trans "Note" %}</th>
+          <th>{% trans "Saisi par" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in expenses %}
+        <tr>
+          <td data-label="Fournisseur" class="td-strong">{{ e.supplier }}</td>
+          <td data-label="Catégorie"><span class="badge badge-muted">{{ e.get_category_display }}</span></td>
+          <td data-label="Montant" class="td-num td-strong">{{ e.amount|floatformat:0 }} FCFA</td>
+          <td data-label="Date">{{ e.paid_at|date:"d/m/Y H:i" }}</td>
+          <td data-label="Note">{{ e.note|default:"—" }}</td>
+          <td data-label="Saisi par">{{ e.created_by.display_name }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="empty-state">{% trans "Aucune dépense enregistrée pour ce filtre." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_previous or page_obj.has_next %}
+  <nav class="pagination" aria-label="Pagination dépenses">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      {% trans "Précédent" %}
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm is-disabled">{% trans "Précédent" %}</span>
+    {% endif %}
+    <span class="page-info">{% trans "Page" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}">
+      {% trans "Suivant" %}
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm is-disabled">{% trans "Suivant" %}</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

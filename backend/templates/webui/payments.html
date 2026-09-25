@@ -1,0 +1,175 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Paiements" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Paiements Mobile Money" %}</h1>
+    <p class="page-sub">{% trans "Scanner IA, saisie SMS et file de réconciliation — validation comptable." %}</p>
+  </div>
+</div>
+
+<section class="card scanner-card">
+  <header class="card-head">
+    <h2 class="card-title">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+      {% trans "Scanner un reçu Mobile Money" %}
+    </h2>
+    <span class="card-hint">{% trans "Extraction automatique, rapprochement puis validation comptable." %}</span>
+  </header>
+  <div class="scanner-grid">
+    <form class="scanner-form" method="post" action="{% url 'payment_evidence' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <p class="scanner-step">{% trans "Option 1 — Photo du reçu" %}</p>
+      <div class="field">
+        <label class="field-label" for="{{ evidence_form.image.id_for_label }}">{{ evidence_form.image.label }}</label>
+        {{ evidence_form.image }}
+        {% for error in evidence_form.image.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>
+        {% trans "Analyser avec l'IA" %}
+      </button>
+    </form>
+
+    <form class="scanner-form" method="post" action="{% url 'payment_sms' %}">
+      {% csrf_token %}
+      <p class="scanner-step">{% trans "Option 2 — SMS de confirmation" %}</p>
+      <div class="field">
+        <label class="field-label" for="{{ sms_form.text.id_for_label }}">{{ sms_form.text.label }}</label>
+        {{ sms_form.text }}
+        {% for error in sms_form.text.errors %}<p class="error-text">{{ error }}</p>{% endfor %}
+      </div>
+      <button type="submit" class="btn btn-ghost">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        {% trans "Extraire du SMS" %}
+      </button>
+    </form>
+  </div>
+</section>
+
+<div class="filter-bar">
+  <div class="chip-row">
+    <a class="chip {% if not current_status %}chip-active{% endif %}" href="{% url 'payments' %}">{% trans "Tous" %}</a>
+    <a class="chip {% if current_status == 'NON_RATTACHE' %}chip-active{% endif %}" href="?status=NON_RATTACHE">{% trans "Non rattachés" %} <span class="chip-count">{{ status_counts.NON_RATTACHE }}</span></a>
+    <a class="chip {% if current_status == 'A_VALIDER' %}chip-active{% endif %}" href="?status=A_VALIDER">{% trans "À valider" %} <span class="chip-count">{{ status_counts.A_VALIDER }}</span></a>
+    <a class="chip {% if current_status == 'RECONCILIE' %}chip-active{% endif %}" href="?status=RECONCILIE">{% trans "Réconciliés" %} <span class="chip-count">{{ status_counts.RECONCILIE }}</span></a>
+    <a class="chip {% if current_status == 'ANOMALIE' %}chip-active{% endif %}" href="?status=ANOMALIE">{% trans "Anomalies" %} <span class="chip-count">{{ status_counts.ANOMALIE }}</span></a>
+  </div>
+
+  <form class="filter-form" method="get" action="{% url 'payments' %}">
+    <div class="filter-field">
+      <label class="visually-hidden" for="filterStatus">{% trans "Statut" %}</label>
+      <select id="filterStatus" name="status" class="input">
+        <option value="">{% trans "Tous les statuts" %}</option>
+        {% for code, label in status_choices %}
+        <option value="{{ code }}" {% if code == current_status %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-field">
+      <label class="visually-hidden" for="filterChannel">{% trans "Canal" %}</label>
+      <select id="filterChannel" name="channel" class="input">
+        <option value="">{% trans "Tous les canaux" %}</option>
+        {% for code, label in channel_choices %}
+        <option value="{{ code }}" {% if code == current_channel %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-field filter-grow">
+      <label class="visually-hidden" for="filterQ">{% trans "Recherche" %}</label>
+      <input id="filterQ" type="search" name="q" class="input" value="{{ current_q }}" placeholder="{% trans 'Référence, payeur, téléphone…' %}">
+    </div>
+    <button type="submit" class="btn btn-primary">{% trans "Filtrer" %}</button>
+    <a class="btn btn-ghost" href="{% url 'payments' %}">{% trans "Réinitialiser" %}</a>
+  </form>
+</div>
+
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table table-responsive">
+      <thead>
+        <tr>
+          <th>{% trans "Référence" %}</th>
+          <th class="th-num">{% trans "Montant" %}</th>
+          <th>{% trans "Canal" %}</th>
+          <th>{% trans "Payeur" %}</th>
+          <th>{% trans "Date" %}</th>
+          <th>{% trans "Facture" %}</th>
+          <th>{% trans "Statut" %}</th>
+          <th class="th-num">{% trans "Confiance IA" %}</th>
+          <th>{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr>
+          <td data-label="Référence"><span class="mono td-strong">{{ p.provider_ref }}</span></td>
+          <td data-label="Montant" class="td-num td-strong">{{ p.amount|floatformat:0 }} FCFA</td>
+          <td data-label="Canal">
+            <span class="canal-chip"><span class="canal-dot canal-{{ p.channel|lower }}"></span>{{ p.get_channel_display }}</span>
+          </td>
+          <td data-label="Payeur">
+            {{ p.payer_name|default:"—" }}
+            {% if p.payer_phone %}<span class="cell-sub">{{ p.payer_phone }}</span>{% endif %}
+            {% if p.created_by %}<span class="cell-sub">{% trans "Saisi par" %} {{ p.created_by.display_name }}</span>{% endif %}
+          </td>
+          <td data-label="Date">{{ p.paid_at|date:"d/m/Y H:i" }}</td>
+          <td data-label="Facture">{% if p.invoice %}<span class="mono">{{ p.invoice.reference }}</span>{% else %}—{% endif %}</td>
+          <td data-label="Statut">
+            <span class="badge {% if p.status == 'RECONCILIE' %}badge-success{% elif p.status == 'ANOMALIE' %}badge-danger{% elif p.status == 'A_VALIDER' %}badge-warning{% else %}badge-muted{% endif %}">{{ p.get_status_display }}</span>
+            {% if p.match_method %}<span class="cell-sub">{% trans "Méthode :" %} {{ p.get_match_method_display }}</span>{% endif %}
+          </td>
+          <td data-label="Confiance IA" class="td-num"><span class="mono">{{ p.ai_confidence|floatformat:2 }}</span></td>
+          <td data-label="Actions">
+            <div class="actions-row">
+              {% if p.evidence_image %}
+              <a class="btn btn-ghost btn-sm" href="{{ p.evidence_image.url }}" target="_blank" rel="noopener">{% trans "Voir preuve" %}</a>
+              {% endif %}
+              {% if can_validate and p.status == "A_VALIDER" %}
+              <form class="inline-form" method="post" action="{% url 'payment_decision' p.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="decision" value="RECONCILIE">
+                <button type="submit" class="btn btn-success btn-sm">{% trans "Valider" %}</button>
+              </form>
+              <form class="inline-form" method="post" action="{% url 'payment_decision' p.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="decision" value="ANOMALIE">
+                <button type="submit" class="btn btn-danger btn-sm">{% trans "Anomalie" %}</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="empty-state">{% trans "Aucun paiement ne correspond aux filtres." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_previous or page_obj.has_next %}
+  <nav class="pagination" aria-label="Pagination paiements">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      {% trans "Précédent" %}
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm is-disabled">{% trans "Précédent" %}</span>
+    {% endif %}
+    <span class="page-info">{% trans "Page" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}">
+      {% trans "Suivant" %}
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+    </a>
+    {% else %}
+    <span class="btn btn-ghost btn-sm is-disabled">{% trans "Suivant" %}</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

@@ -10,9 +10,13 @@ from .models import AuditLog
 
 
 def verify_chain() -> Tuple[bool, List[str]]:
-    """Verify the integrity of the whole audit chain."""
+    """Verify the integrity of the whole audit chain.
+
+    NB: la première entrée d'une chaîne saine a prev_hash = "0" * 64
+    (défaut du modèle), PAS une chaîne vide.
+    """
     rows = list(AuditLog.objects.order_by("id"))
-    prev_hash = ""
+    prev_hash = "0" * 64
     broken: list[str] = []
     for row in rows:
         # Check that the row's prev_hash matches the previous row's hash.
