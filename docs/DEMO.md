@@ -73,5 +73,11 @@ Transfert recu de AFI Adjovi (94123456). Montant: 10 000 FCFA. ID Transaction: M
 - `DecimalField(14,2)` partout, `provider_ref` UNIQUE au niveau DB (anti-doublon natif).
 - Audit immuable : hash-chain SHA-256, `save()`/`delete()` verrouillés, `verify_chain()` en direct sur la page Audit.
 - RBAC 3 niveaux cohérent côté API (DRF permissions) et côté web (mixins).
-- Tests : **67 tests pytest verts**, smoke tests web 23 + 14 vérifiés.
+- Tests : **71 tests pytest verts**, smoke tests web 23 + 14 vérifiés.
 - PostgreSQL via `DATABASE_URL` (docker-compose fourni) ; SQLite fallback tests.
+- TresorIA : LLM réel (GPT-4o-mini / Gemini) si clé API — KPIs pré-calculés injectés dans le prompt, **jamais de SQL, jamais d'accès DB** ; sinon moteur de règles déterministe 100 % hors-ligne (variable `TREASORIA_USE_LLM=0` pour forcer les règles).
+
+## 10. Plan B — vidéo secours 60 s
+- Script complet (storyboard seconde par seconde + voice-over + checklist de tournage) : **`docs/VIDEO_SECOURS.md`**.
+- À tourner aujourd'hui, 2 copies physiques (clé USB + téléphone) + 1 lien cloud testé.
+- À montrer UNIQUEMENT si la démo live est impossible (connexion, projector, Render down).

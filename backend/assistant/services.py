@@ -11,10 +11,27 @@ Ici, en mode démo (pas de clé OpenAI), on simule le LLM via un moteur
 de règles qui pattern-matche la question et répond avec les KPIs.
 """
 from __future__ import annotations
+import logging
+import os
 import re
+import sys
 from typing import Optional
 
 from reporting.services import compute_kpis
+
+logger = logging.getLogger("monexa.tresoria")
+
+
+def _setting(name: str, default: str = "") -> str:
+    """Read from Django settings (.env) then process env."""
+    try:
+        from django.conf import settings
+        value = getattr(settings, name, None)
+        if value:
+            return str(value)
+    except Exception:
+        pass
+    return os.environ.get(name, default) or default
 
 
 def _format_fcfa(amount: float) -> str:
@@ -23,6 +40,139 @@ def _format_fcfa(amount: float) -> str:
         return f"{int(amount):,} FCFA".replace(",", " ")
     except (ValueError, TypeError):
         return "—"
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Niveau 1 — LLM réel (clé API présente) : reformulation des KPIs.
+# RÈGLE FONDAMENTALE §12.1 : le LLM ne reçoit QUE les KPIs pré-calculés,
+# jamais d'accès DB, jamais de SQL. Fallback automatique → moteur de règles.
+# ────────────────────────────────────────────────────────────────────────
+
+_TRESORIA_SYSTEM_PROMPT = """Tu es TresorIA, le CFO virtuel de MoneXa, une PME ouest-africaine.
+RÈGLES ABSOLUES :
+- Tu réponds UNIQUEMENT à partir des KPIs fournis ci-dessous.
+- N'invente JAMAIS un chiffre qui ne figure pas dans les KPIs.
+- Jamais de SQL, jamais de mention technique de base de données.
+- Réponse en français, maximum 3 phrases, ton professionnel et chaleureux.
+- Montants en FCFA formatés (ex: 1 250 000 FCFA).
+- Si la question dépasse les KPIs fournis, redirige vers une question possible."""
+
+
+def _serialize_kpis(kpis: dict) -> str:
+    """Sérialise les KPIs pré-calculés en texte injectable dans le prompt LLM."""
+    canaux = kpis.get("solde_par_canal", {})
+    canaux_str = " ; ".join(f"{c}={_format_fcfa(v)}" for c, v in canaux.items() if v)
+    lignes = [
+        f"- Solde total consolidé : {_format_fcfa(kpis.get('solde_total', 0))}",
+        f"- Soldes par canal : {canaux_str or 'aucun'}",
+        f"- Encaissé 7 jours : {_format_fcfa(kpis.get('encaisse_7j', 0))}",
+        f"- Encaissé 30 jours : {_format_fcfa(kpis.get('encaisse_30j', 0))}",
+        f"- Décaissé 7 jours : {_format_fcfa(kpis.get('decaisse_7j', 0))}",
+        f"- Décaissé 30 jours : {_format_fcfa(kpis.get('decaisse_30j', 0))}",
+        f"- Flux net 30 jours : {_format_fcfa(kpis.get('flux_net_30j', 0))}",
+        f"- Factures en attente : {kpis.get('factures_en_attente', 0)}",
+        f"- Factures en retard : {kpis.get('factures_en_retard', 0)}",
+        f"- Paiements à valider : {kpis.get('paiements_a_valider', 0)}",
+        f"- Anomalies en cours : {kpis.get('nb_anomalies', 0)}",
+        f"- Prévision trésorerie J+7 : {_format_fcfa(kpis.get('prevision_j7', 0))}",
+        f"- Prévision trésorerie J+30 : {_format_fcfa(kpis.get('prevision_j30', 0))}",
+    ]
+    top = kpis.get("top_5_clients") or []
+    if top:
+        clients = " ; ".join(
+            f"{c['name']} ({_format_fcfa(c['total'])}, {c['count']} paiements)"
+            for c in top[:5]
+        )
+        lignes.append(f"- Top clients : {clients}")
+    return "\n".join(lignes)
+
+
+def _build_llm_prompt(question: str, kpis: dict) -> str:
+    """Construit le prompt : règles + KPIs + question. Aucun accès DB côté LLM."""
+    return (
+        _TRESORIA_SYSTEM_PROMPT
+        + "\n\nKPIs TRÉSORERIE (pré-calculés côté serveur) :\n"
+        + _serialize_kpis(kpis)
+        + f"\n\nQuestion du dirigeant : « {question.strip()} »"
+    )
+
+
+def _call_llm_cfo(question: str, kpis: dict) -> Optional[str]:
+    """
+    Appelle OpenAI (gpt-4o-mini) ou Gemini Flash avec les KPIs injectés.
+    Le LLM ne fait que REFORMULER — jamais de SQL, jamais d'accès DB.
+    Retourne None si pas de clé, timeout ou erreur → fallback moteur de règles.
+    """
+    # Garde pytest : déterminisme des tests sans réseau (même règle que ai_pipeline)
+    if "pytest" in sys.modules and not os.environ.get("FORCE_REAL_LLM"):
+        return None
+    import json as _json
+    import urllib.request
+
+    prompt = _build_llm_prompt(question, kpis)
+    try:
+        timeout = int(_setting("TREASORIA_LLM_TIMEOUT", "12"))
+    except ValueError:
+        timeout = 12
+
+    openai_key = _setting("OPENAI_API_KEY")
+    if openai_key.strip():
+        try:
+            body = {
+                "model": _setting(
+                    "OPENAI_VISION_MODEL",
+                    os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini"),
+                ),
+                "temperature": 0.2,
+                "max_tokens": 250,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/chat/completions",
+                data=_json.dumps(body).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {openai_key.strip()}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = _json.loads(resp.read().decode("utf-8"))
+            content = data["choices"][0]["message"]["content"]
+            if content and content.strip():
+                return content.strip()
+        except Exception as exc:
+            logger.warning("TresorIA LLM OpenAI indisponible: %s", exc)
+
+    gemini_key = _setting("GEMINI_API_KEY")
+    if gemini_key.strip():
+        try:
+            model = _setting(
+                "GEMINI_VISION_MODEL",
+                os.environ.get("GEMINI_VISION_MODEL", "gemini-2.0-flash"),
+            )
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:generateContent?key={gemini_key.strip()}"
+            )
+            body = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 250},
+            }
+            req = urllib.request.Request(
+                url,
+                data=_json.dumps(body).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = _json.loads(resp.read().decode("utf-8"))
+            content = data["candidates"][0]["content"]["parts"][0]["text"]
+            if content and content.strip():
+                return content.strip()
+        except Exception as exc:
+            logger.warning("TresorIA LLM Gemini indisponible: %s", exc)
+    return None
 
 
 def answer_question(user, question: str) -> str:
@@ -47,6 +197,14 @@ def answer_question(user, question: str) -> str:
 
     q = question.lower().strip()
     kpis = compute_kpis()
+
+    # Niveau 1 — LLM réel si clé API configurée (KPIs injectés, jamais de SQL)
+    if _setting("TREASORIA_USE_LLM", "1").strip().lower() in ("1", "true", "yes", "on"):
+        llm_answer = _call_llm_cfo(question, kpis)
+        if llm_answer:
+            return llm_answer
+
+    # Niveau 2 — moteur de règles déterministe (démo hors-ligne / fallback)
 
     # ── Pattern matching ────────────────────────────────────────────
 

@@ -227,6 +227,11 @@ GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
 GEMINI_VISION_MODEL = config("GEMINI_VISION_MODEL", default="gemini-2.0-flash")
 OPENAI_VISION_MODEL = config("OPENAI_VISION_MODEL", default="gpt-4o-mini")
 
+# TresorIA (chatbot CFO) — LLM réel si clé API, sinon moteur de règles.
+# Le LLM ne reçoit JAMAIS d'accès DB : uniquement les KPIs pré-calculés (§12.1).
+TREASORIA_USE_LLM = config("TREASORIA_USE_LLM", default="1")
+TREASORIA_LLM_TIMEOUT = config("TREASORIA_LLM_TIMEOUT", default="12")
+
 # ──────────────────────────────────────────────────────────────────────────
 # Trésorerie — saisonnalité & passerelles Mobile Money
 # ──────────────────────────────────────────────────────────────────────────
