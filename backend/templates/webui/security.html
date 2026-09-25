@@ -1,0 +1,97 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Sécurité" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Sécurité du compte" %}</h1>
+    <p class="page-sub">{% trans "Double authentification TOTP, diagnostic du pipeline d'extraction IA." %}</p>
+  </div>
+</div>
+
+{% if is_2fa_enabled %}
+<div class="alert-banner alert-success" role="status">
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+  <p>{% trans "La 2FA est activée — chaque connexion demandera un code à 6 chiffres." %}</p>
+</div>
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Authentification à deux facteurs (TOTP)" %}</h2>
+    <span class="badge badge-success">{% trans "Active" %}</span>
+  </header>
+  <p class="empty-state">
+    {% trans "Appareil enregistré" %} : <strong>{{ active_device.name }}</strong>
+    {% if active_device.last_used_at %} · {% trans "dernière utilisation" %} {{ active_device.last_used_at|date:"d/m/Y H:i" }}{% endif %}
+  </p>
+  <form method="post" action="{% url 'security' %}" class="stack-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="disable">
+    <button type="submit" class="btn btn-outline-danger">{% trans "Désactiver la 2FA" %}</button>
+  </form>
+</section>
+{% elif pending_device %}
+<div class="alert-banner alert-warning" role="status">
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+  <p>{% trans "Scannez ce QR code, puis saisissez un code pour confirmer l'activation." %}</p>
+</div>
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Activer la 2FA — étape 2/2" %}</h2>
+    <span class="badge badge-warning">{% trans "En attente de confirmation" %}</span>
+  </header>
+  <div class="totp-setup">
+    <img src="{{ qr }}" alt="{% trans 'QR code TOTP' %}" class="qr-code" width="200" height="200">
+    <ol class="totp-steps">
+      <li>{% trans "Ouvrez Google Authenticator, Authy ou Aegis." %}</li>
+      <li>{% trans "Scannez ce QR code (ou saisissez la clé manuellement)." %}</li>
+      <li>{% trans "Saisissez le code à 6 chiffres ci-dessous pour confirmer." %}</li>
+    </ol>
+  </div>
+  <form method="post" action="{% url 'security' %}" class="stack-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="confirm">
+    {{ totp_form.code.label_tag }}
+    {{ totp_form.code }}
+    {% if totp_form.code.errors %}<p class="field-error">{{ totp_form.code.errors.0 }}</p>{% endif %}
+    <button type="submit" class="btn btn-primary">{% trans "Confirmer l'activation" %}</button>
+  </form>
+</section>
+{% else %}
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Authentification à deux facteurs (TOTP)" %}</h2>
+    <span class="badge badge-muted">{% trans "Inactive" %}</span>
+  </header>
+  <p class="empty-state">
+    {% trans "Protégez le compte Gérant par un code TOTP (Google Authenticator, Authy…). Le modèle de compte le supporte déjà — l'activation prend 2 minutes." %}
+  </p>
+  <form method="post" action="{% url 'security' %}" class="stack-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="enable">
+    <button type="submit" class="btn btn-primary">{% trans "Activer la 2FA" %}</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Pipeline d'extraction IA" %}</h2>
+    <span class="badge {% if pipeline.level == 'premium' %}badge-success{% elif pipeline.level == 'local' %}badge-warning{% else %}badge-muted{% endif %}">
+      {{ pipeline.mode }}
+    </span>
+  </header>
+  <p class="empty-state">
+    {% if pipeline.level == 'premium' %}
+    {% trans "Les clés API Gemini/OpenAI sont actives : les photos de reçus sont analysées par LLM Vision avec fallback OCR local." %}
+    {% elif pipeline.level == 'local' %}
+    {% trans "Aucune clé API : le moteur OCR local Tesseract extrait le texte des reçus, puis le parser SMS détermine montant, référence et opérateur — 100 % hors-ligne." %}
+    {% else %}
+    {% trans "Mode démo déterministe : ajoutez GEMINI_API_KEY ou installez Tesseract pour l'extraction réelle." %}
+    {% endif %}
+  </p>
+</section>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Notifications" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Notifications" %}</h1>
+    <p class="page-sub">{% trans "Rappels de factures échues, paiements à valider, alertes passerelles." %}</p>
+  </div>
+</div>
+
+<section class="card">
+  {% for n in notifications %}
+  <article class="anomaly-item {% if not n.is_read %}is-unread{% endif %}">
+    <div class="anomaly-head">
+      <h3 class="anomaly-type">{{ n.title }}</h3>
+      <span class="badge {% if n.kind == 'RAPPEL_FACTURE' %}badge-warning{% elif n.kind == 'ANOMALIE' %}badge-danger{% elif n.kind == 'VALIDATION' %}badge-info{% else %}badge-muted{% endif %}">{{ n.get_kind_display }}</span>
+    </div>
+    {% if n.body %}<p class="anomaly-desc">{{ n.body }}</p>{% endif %}
+    <div class="anomaly-actions">
+      <span class="anomaly-ref">{{ n.created_at|date:"d/m/Y H:i" }}</span>
+      {% if n.url %}<a class="btn btn-small btn-outline" href="{{ n.url }}">{% trans "Ouvrir" %}</a>{% endif %}
+      {% if not n.is_read %}
+      <form method="post" action="{% url 'notification_read' n.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-small btn-ghost">{% trans "Marquer comme lue" %}</button>
+      </form>
+      {% endif %}
+    </div>
+  </article>
+  {% empty %}
+  <p class="empty-state">{% trans "Aucune notification — tout est à jour. Lancez `python manage.py send_reminders` pour générer les rappels." %}</p>
+  {% endfor %}
+</section>
+{% endblock %}

@@ -109,3 +109,63 @@ hors de l'app mobile Flutter, qui exige un smartphone pour la démonstration.
 3. **Rotation du token GitHub** : tout token utilisé pour un push doit être révoqué et
    régénéré immédiatement après l'opération.
 4. **2FA** : imposer le TOTP pour le rôle Gérant en production (déjà supporté par le modèle).
+
+---
+
+## 7. V2.1 — Améliorations court & moyen terme (réalisées)
+
+Livraison du 2026-09-25, en amont de la démo : les axes court terme (P1) et moyen terme
+(P2) identifiés dans la section 4 ont été implémentés, testés et documentés.
+
+### IA — extraction réelle à trois niveaux (A11)
+- **Parser SMS déterministe** (`finance/services/ai_pipeline.py::parse_sms_payment`) :
+  formats réels T-Money / Moov / Flooz — montant, référence, opérateur, payeur, téléphone,
+  date. Fonctionne 100 % hors-ligne, sans clé API, confiance 0.95.
+- **OCR local Tesseract** (`_ocr_image`) : les photos de reçus sont lues par OCR lorsque
+  aucune clé LLM n'est disponible, puis analysées par le parser SMS (confiance 0.90).
+- **LLM Vision / LLM texte** : `GEMINI_API_KEY` / `OPENAI_API_KEY` activent l'extraction
+  multimodale (0.97) ; le texte collé profite aussi du LLM avant le fallback mock.
+- `pipeline_status()` affiche le mode actif sur la page Sécurité (dashboard diagnostic démo).
+
+### Passerelles de collecte T-Money / Moov / Flooz (A12)
+- `finance/services/gateways.py` : `request_collection` (push client), `check_status`
+  (polling), `confirm_gateway_transaction` (création Payment `GW…` + réconciliation auto),
+  webhook opérateur signé HMAC-SHA256 (`POST /api/gateways/webhook/<operator>/`).
+- Modèle `GatewayTransaction` (finance) ; page web **Encaissements** (Comptable+) avec
+  bouton « Simuler la validation client » pour la démo sandbox — production par variables
+  d'environnement (`TMONEY_*`, `MOOV_*`, `FLOOZ_*`).
+
+### Anti-fraude SMS (A13)
+- 4 nouvelles règles (`finance/services/anomalies.py`) : numéro émetteur incompatible avec
+  le canal (préfixes opérateurs Togo configurables `MONEXA_OPERATOR_PREFIXES`), référence
+  falsifiée, rafale du même émetteur (≥3 paiements/10 min), SMS d'hameçonnage.
+- Page Anomalies enrichie (scan des 200 derniers paiements, tous statuts).
+
+### Saisonnalité jours de marché (A14)
+- `MARKET_DAYS` (défaut « 5 » = samedi) booste la prévision Holt-Winters des jours de
+  grand marché ; uplift calibré sur l'historique réel, borné [0.5, 2.0], plancher ×1.5.
+
+### 2FA TOTP côté web (A15)
+- Page **Sécurité** (Gérant) : activation, QR code (otpauth, rendu data-URI sans disque),
+  confirmation par code, désactivation. Connexion en deux étapes (`/login/totp/`) avec
+  anti-replay et intégration django-otp (`user.is_verified()`).
+
+### Notifications & rappels (A16)
+- Modèle `Notification` (accounts) + cloche in-app (compteur non lues) + page déduplicée.
+- Commande `manage.py send_reminders` (cron-able) : factures échues, file A_VALIDER.
+
+### Exports PDF (A17)
+- `reporting/pdf.py` (reportlab) : **journal de caisse** (paysage, totaux) et **bilan de
+  trésorerie** 30/90 j (encaissements par canal, dépenses par catégorie, solde net,
+  alertes) — charte MoneXa, présentables banque/comptabilité.
+
+### App mobile — file de sync offline (A18)
+- `mobile_app/lib/core/offline/sync_queue.dart` : file Hive `pending_uploads` ; tout reçu
+  photographié ou SMS collé sans réseau est persisté puis **rejoué automatiquement** au
+  démarrage et au retour au premier plan (retry ×5, jamais de perte de preuve).
+- `mobile_app/build_apk.sh` : build APK reproductible (pub get → analyze → apk).
+
+### Vérification
+- **67 tests pytest verts** (dont 27 nouveaux : parser SMS, fraude, passerelles sandbox,
+  webhook HMAC, 2FA TOTP, rappels, PDF, saisonnalité) ; smoke web 23/23 + **14/14 v2.1**.
+- Guide de démonstration complet : [`docs/DEMO.md`](DEMO.md).

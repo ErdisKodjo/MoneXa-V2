@@ -19,6 +19,7 @@ import hashlib
 import io
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -139,6 +140,242 @@ Réponds UNIQUEMENT avec un JSON compact, sans markdown, avec exactement ces cl�
   "date_paiement": "2026-09-24T14:23:00+00:00"
 }
 operator doit être TMONEY, MOOV ou FLOOZ. montant > 0. date_paiement ISO-8601."""
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Parser SMS déterministe — formats réels T-Money / Moov / Flooz (Plan A texte)
+# Aucune clé API requise : fonctionne 100 % hors-ligne.
+# ──────────────────────────────────────────────────────────────────────────
+_RE_AMOUNT = re.compile(r"(\d[\d\s.,]{2,}?)\s*(?:FCFA|F\s?CFA|CFA|F\b)", re.IGNORECASE)
+_RE_REF = re.compile(
+    r"(?:ref(?:erence)?|id\s*trans(?:action)?|transaction|trans\s*id|id)\s*[:.]?\s*"
+    r"([A-Z0-9][A-Z0-9._\-]{5,40})",
+    re.IGNORECASE,
+)
+_RE_REF_BARE = re.compile(r"\b((?:TMX|MV|FL|MP)[A-Z0-9.\-]{5,40}|\d{12,18})\b")
+_RE_PHONE = re.compile(r"(?:\+?228[\s.\-]?)?\b([79]\d[\s.\-]?\d{2}[\s.\-]?\d{2}[\s.\-]?\d{2})\b")
+_RE_DATE = re.compile(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})(?:[,\s]*(?:à|at)?\s*(\d{1,2}):(\d{2}))?")
+_RE_PARTY_PAREN = re.compile(
+    r"(?:re[cç]u|reception|transfert|envoy[eé]|paie?ment|versement)[^()\n]{0,60}?"
+    r"\b(?:de|du|à|a)\s+(.{2,60}?)\s*\(?\s*(?:\+?228[\s.\-]?)?\b([79]\d{7})\b",
+    re.IGNORECASE,
+)
+_RE_PARTY_PLAIN = re.compile(
+    r"(?:re[cç]u|reception|transfert|envoy[eé]|paie?ment|versement)[^()\n]{0,60}?"
+    r"\b(?:de|du|à|a)\s+((?:[A-ZÀ-Ÿ][\wÀ-ÿ'’\-]+(?:\s+[A-ZÀ-Ÿ][\wÀ-ÿ'’\-]+){0,3})|\d{8})",
+)
+_RE_OPERATOR_HINTS = {
+    "TMONEY": re.compile(r"t[\s\-]?money|togocom|tmx|t\-money", re.IGNORECASE),
+    "MOOV": re.compile(r"moov", re.IGNORECASE),
+    "FLOOZ": re.compile(r"flooz", re.IGNORECASE),
+}
+
+
+def _clean_amount_str(raw: str) -> Optional[Decimal]:
+    """'1 500 000 FCFA' / '25.000 FCFA' / '25000' → Decimal."""
+    cleaned = raw.replace(" ", "").replace("\u00a0", "").replace(".", "").replace(",", "")
+    if not cleaned.isdigit():
+        return None
+    value = int(cleaned)
+    if value <= 0 or value > 9_999_999_999:
+        return None
+    return Decimal(value)
+
+
+def _detect_operator(text: str, reference: str) -> str:
+    for operator, hint in _RE_OPERATOR_HINTS.items():
+        if hint.search(text):
+            return operator
+    ref_up = (reference or "").upper()
+    if ref_up.startswith(("TMX", "TM")):
+        return "TMONEY"
+    if ref_up.startswith(("MV", "MP")):
+        return "MOOV"
+    if ref_up.startswith("FL"):
+        return "FLOOZ"
+    return ""
+
+
+def parse_sms_payment(text: str) -> Optional[PaymentExtraction]:
+    """
+    Parse un SMS Mobile Money ouest-africain avec des règles déterministes.
+
+    Couvre les formulations réelles T-Money / Moov Money / Flooz (reçu du
+    client « Vous avez envoyé… » ou reçu du commerçant « Vous avez reçu… »).
+    Retourne None si un champ obligatoire (montant, référence) manque —
+    l'appelant bascule alors sur le LLM puis le mock.
+    """
+    if not text or len(text) < 10:
+        return None
+
+    amount = None
+    m = _RE_AMOUNT.search(text)
+    if m:
+        amount = _clean_amount_str(m.group(1))
+    if amount is None:
+        return None
+
+    reference = ""
+    m = _RE_REF.search(text) or _RE_REF_BARE.search(text)
+    if m:
+        reference = m.group(1).strip("._-")
+    if not reference:
+        # Dernier recours : ID long uniquement en chiffres (T-Money legacy)
+        m = re.search(r"\b(\d{14,18})\b", text)
+        if m:
+            reference = m.group(1)
+    if not reference:
+        return None
+
+    operator = _detect_operator(text, reference)
+    if not operator:
+        return None
+
+    emetteur, phone = "", ""
+    m = _RE_PARTY_PAREN.search(text)
+    if m:
+        emetteur = m.group(1).strip(" -–—:,").strip()
+        phone = f"+228 {m.group(2)[:2]} {m.group(2)[2:4]} {m.group(2)[4:6]} {m.group(2)[6:8]}"
+    else:
+        m = _RE_PARTY_PLAIN.search(text)
+        if m:
+            candidate = m.group(1).strip()
+            if candidate.isdigit() and len(candidate) == 8:
+                phone = f"+228 {candidate[:2]} {candidate[2:4]} {candidate[4:6]} {candidate[6:8]}"
+            else:
+                emetteur = candidate.title()
+    if not phone:
+        m = _RE_PHONE.search(text)
+        if m:
+            digits = re.sub(r"\D", "", m.group(1))
+            phone = f"+228 {digits[:2]} {digits[2:4]} {digits[4:6]} {digits[6:8]}"
+
+    paid_at = datetime.now(timezone.utc)
+    m = _RE_DATE.search(text)
+    if m:
+        day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if year < 100:
+            year += 2000
+        hour = int(m.group(4)) if m.group(4) else 12
+        minute = int(m.group(5)) if m.group(5) else 0
+        try:
+            paid_at = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
+        except ValueError:
+            paid_at = datetime.now(timezone.utc)
+
+    try:
+        return PaymentExtraction(
+            montant=amount,
+            reference=reference,
+            operator=operator,
+            emetteur=emetteur or "Client Mobile Money",
+            telephone_emetteur=phone or None,
+            date_paiement=paid_at,
+        )
+    except Exception as exc:  # Pydantic ValidationError ou autre
+        logger.debug("parse_sms_payment rejeté: %s", exc)
+        return None
+
+
+def _call_llm_text(text: str) -> Optional[PaymentExtraction]:
+    """Extraction LLM texte seul (GPT-4o-mini / Gemini Flash) si clé présente."""
+    import base64 as _b64  # noqa: F401  (parité avec vision, évite les imports conditionnels)
+    import json
+    import urllib.error
+    import urllib.request
+
+    provider_prompt = (
+        _VISION_PROMPT
+        + "\n\nSMS brut à analyser (aucune image) :\n<<<\n"
+        + text[:1500]
+        + "\n>>>"
+    )
+    body_openai = {
+        "model": _setting("OPENAI_VISION_MODEL", os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")),
+        "temperature": 0,
+        "messages": [{"role": "user", "content": provider_prompt}],
+    }
+
+    def _post(url: str, payload: dict, headers: dict):
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    openai_key = _setting("OPENAI_API_KEY")
+    if openai_key.strip():
+        try:
+            data = _post(
+                "https://api.openai.com/v1/chat/completions",
+                body_openai,
+                {"Authorization": f"Bearer {openai_key.strip()}", "Content-Type": "application/json"},
+            )
+            return _parse_llm_json(data["choices"][0]["message"]["content"])
+        except Exception as exc:
+            logger.warning("LLM texte OpenAI indisponible: %s", exc)
+
+    gemini_key = _setting("GEMINI_API_KEY")
+    if gemini_key.strip():
+        try:
+            model = _setting("GEMINI_VISION_MODEL", os.environ.get("GEMINI_VISION_MODEL", "gemini-2.0-flash"))
+            data = _post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key.strip()}",
+                {"contents": [{"parts": [{"text": provider_prompt}]}]},
+                {"Content-Type": "application/json"},
+            )
+            return _parse_llm_json(data["candidates"][0]["content"]["parts"][0]["text"])
+        except Exception as exc:
+            logger.warning("LLM texte Gemini indisponible: %s", exc)
+    return None
+
+
+def _ocr_image(image_bytes: bytes) -> str:
+    """
+    OCR local gratuit (Tesseract) — aucune clé API requise.
+    Retourne le texte détecté ou '' en cas d'échec (jamais d'exception).
+    """
+    try:
+        from PIL import Image
+        import pytesseract
+
+        image = Image.open(io.BytesIO(image_bytes))
+        image = image.convert("L")  # niveaux de gris — reçus imprimés/screenshot
+        text = pytesseract.image_to_string(
+            image, lang="eng", config="--psm 6"
+        )
+        return text.strip()
+    except Exception as exc:
+        logger.debug("OCR indisponible (%s) — fallback déterministe", exc)
+        return ""
+
+
+def pipeline_status() -> dict:
+    """
+    Diagnostic du pipeline d'extraction (affiché sur le dashboard).
+    Permet au Gérant de savoir quel mode est actif avant la démo.
+    """
+    tesseract_ok = False
+    try:
+        import pytesseract
+
+        pytesseract.get_tesseract_version()
+        tesseract_ok = True
+    except Exception:
+        pass
+    if _setting("GEMINI_API_KEY").strip() or _setting("OPENAI_API_KEY").strip():
+        mode = "LLM Vision (clé API active)"
+        level = "premium"
+    elif tesseract_ok:
+        mode = "OCR local Tesseract + règles SMS (100 % hors-ligne)"
+        level = "local"
+    else:
+        mode = "Démo déterministe (aucune IA disponible)"
+        level = "demo"
+    return {"mode": mode, "level": level, "ocr_available": tesseract_ok}
 
 
 def _parse_llm_json(text: str) -> Optional[PaymentExtraction]:
@@ -302,13 +539,28 @@ def extract_payment_from_image(image_bytes: bytes, filename: str = "") -> dict:
     Uses GPT-4o-mini Vision or Gemini Flash when an API key is set.
     Falls back automatically to a deterministic mock (offline / tests / errors).
     """
+    # Niveau 1 — LLM Vision (clé API)
     extraction = _try_real_vision(image_bytes, filename)
     used_llm = extraction is not None
+    used_ocr = False
+    # Niveau 2 — OCR local Tesseract → parser SMS déterministe (100 % hors-ligne)
+    if extraction is None:
+        ocr_text = _ocr_image(image_bytes)
+        if ocr_text:
+            extraction = parse_sms_payment(ocr_text)
+            used_ocr = extraction is not None
+            if used_ocr:
+                extraction.telephone_emetteur = extraction.telephone_emetteur or None
+    # Niveau 3 — mock déterministe (démo / tests)
     if extraction is None:
         extraction = _deterministic_mock(image_bytes)
 
-    confidence = 0.97 if used_llm else 0.85
-    tag = "LLM VISION" if used_llm else "DEMO"
+    if used_llm:
+        confidence, tag = 0.97, "LLM VISION"
+    elif used_ocr:
+        confidence, tag = 0.90, "OCR TESSERACT"
+    else:
+        confidence, tag = 0.85, "DEMO"
     raw_text = (
         f"[{tag}] Paiement reçu de {extraction.emetteur} "
         f"({extraction.telephone_emetteur or 'n/a'}), "
@@ -334,9 +586,20 @@ def extract_payment_from_text(text: str) -> dict:
     Fallback : parse raw SMS text directly (Plan B).
     Used by /api/payments/manual-text/ endpoint.
     """
-    text_bytes = text.encode("utf-8")
-    # Same hash-based mock so behavior is deterministic in tests
-    extraction = _deterministic_mock(text_bytes)
+    # Niveau 1 — parser SMS déterministe (règles opérateurs, hors-ligne)
+    extraction = parse_sms_payment(text)
+    if extraction is not None:
+        confidence, tag = 0.95, "SMS RULES"
+    else:
+        # Niveau 2 — LLM texte si clé API présente
+        extraction = _call_llm_text(text)
+        if extraction is not None:
+            confidence, tag = 0.97, "LLM TEXT"
+        else:
+            # Niveau 3 — mock déterministe (démo / tests)
+            text_bytes = text.encode("utf-8")
+            extraction = _deterministic_mock(text_bytes)
+            confidence, tag = 0.80, "TEXT DEMO"
     return {
         "montant": extraction.montant,
         "reference": extraction.reference,
@@ -344,7 +607,7 @@ def extract_payment_from_text(text: str) -> dict:
         "emetteur": extraction.emetteur,
         "telephone_emetteur": extraction.telephone_emetteur,
         "date_paiement": extraction.date_paiement,
-        "ai_confidence": 0.80,  # slightly lower for text fallback
-        "raw_text": f"[TEXT] {text}",
+        "ai_confidence": confidence,
+        "raw_text": f"[{tag}] {text}",
         "extraction": extraction,
     }

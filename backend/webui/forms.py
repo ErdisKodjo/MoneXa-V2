@@ -175,6 +175,67 @@ class PaymentDecisionForm(forms.Form):
     decision = forms.ChoiceField(choices=DECISIONS, widget=forms.HiddenInput())
 
 
+class TOTPCodeForm(forms.Form):
+    """Code TOTP à 6 chiffres (activation 2FA ou seconde étape de connexion)."""
+
+    code = forms.CharField(
+        label=_("Code d'authentification"),
+        min_length=6,
+        max_length=8,
+        widget=forms.TextInput(
+            attrs={
+                "class": "input",
+                "inputmode": "numeric",
+                "pattern": r"\d{6,8}",
+                "autocomplete": "one-time-code",
+                "placeholder": "123456",
+                "autofocus": True,
+            }
+        ),
+    )
+
+    def clean_code(self):
+        return self.cleaned_data["code"].replace(" ", "").strip()
+
+
+class CollectionForm(forms.Form):
+    """Demande d'encaissement Mobile Money (push USSD vers le client)."""
+
+    OPERATORS = [
+        ("TMONEY", "T-Money"),
+        ("MOOV", "Moov Money"),
+        ("FLOOZ", "Flooz"),
+    ]
+    invoice = forms.ModelChoiceField(
+        label=_("Facture à encaisser"),
+        queryset=Invoice.objects.none(),
+        widget=forms.Select(attrs={"class": "input"}),
+    )
+    operator = forms.ChoiceField(
+        label=_("Opérateur"), choices=OPERATORS, widget=forms.Select(attrs={"class": "input"})
+    )
+    phone = forms.RegexField(
+        label=_("Téléphone du client"),
+        regex=r"^(\+?228[\s.\-]?)?[79]\d[\s.\-]?\d{2}[\s.\-]?\d{2}[\s.\-]?\d{2}$",
+        widget=forms.TextInput(attrs={"class": "input", "placeholder": "90 12 34 56"}),
+        error_messages={"invalid": _("Numéro togolais attendu (ex. 90 12 34 56).")},
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from finance.models import InvoiceStatus
+
+        self.fields["invoice"].queryset = Invoice.objects.filter(
+            status=InvoiceStatus.EN_ATTENTE
+        ).order_by("-issue_date")
+
+    def clean_phone(self):
+        digits = "".join(ch for ch in self.cleaned_data["phone"] if ch.isdigit())
+        if len(digits) > 8:
+            digits = digits[-8:]
+        return digits
+
+
 # Champs de filtre réutilisables ------------------------------------------------
 
 STATUS_FILTER_CHOICES = None  # renseigné dynamiquement dans les vues

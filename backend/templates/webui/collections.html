@@ -1,0 +1,99 @@
+{% extends "webui/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Encaissements Mobile Money" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Encaissements Mobile Money" %}</h1>
+    <p class="page-sub">{% trans "Encaissez directement par push client T-Money / Moov / Flooz — le paiement entre ensuite dans le pipeline de réconciliation et l'audit immuable." %}</p>
+  </div>
+</div>
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Nouvelle demande d'encaissement" %}</h2>
+    <span class="card-hint">
+      {% for op, live in live_modes.items %}
+        {{ op }} : {% if live %}<span class="badge badge-success">{% trans "production" %}</span>{% else %}<span class="badge badge-muted">{% trans "sandbox" %}</span>{% endif %}
+      {% endfor %}
+    </span>
+  </header>
+  <form method="post" action="{% url 'collections' %}" class="form-grid">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="request">
+    <div class="field">
+      <label for="{{ form.invoice.id_for_label }}">{{ form.invoice.label }}</label>
+      {{ form.invoice }}
+    </div>
+    <div class="field">
+      <label for="{{ form.operator.id_for_label }}">{{ form.operator.label }}</label>
+      {{ form.operator }}
+    </div>
+    <div class="field">
+      <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+      {{ form.phone }}
+    </div>
+    <div class="field field-submit">
+      <button type="submit" class="btn btn-primary">{% trans "Envoyer la demande au client" %}</button>
+    </div>
+  </form>
+  <p class="card-hint">
+    {% trans "Le client reçoit un push sur son téléphone et valide le débit. En sandbox, un bouton « Simuler la validation » apparaît pour la démonstration." %}
+  </p>
+</section>
+
+<section class="card">
+  <header class="card-head">
+    <h2 class="card-title">{% trans "Collections récentes" %}</h2>
+    <span class="card-hint">{% trans "Le statut se rafraîchit à l'ouverture de la page (webhook opérateur en production)." %}</span>
+  </header>
+  {% if transactions %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "ID opérateur" %}</th>
+          <th>{% trans "Facture" %}</th>
+          <th>{% trans "Client" %}</th>
+          <th>{% trans "Opérateur" %}</th>
+          <th class="th-num">{% trans "Montant" %}</th>
+          <th>{% trans "Statut" %}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for gt in transactions %}
+        <tr>
+          <td class="mono td-strong">{{ gt.gateway_tx_id }}</td>
+          <td class="mono">{{ gt.invoice.reference }}</td>
+          <td>{{ gt.phone }}</td>
+          <td>{{ gt.get_operator_display }}</td>
+          <td class="td-num">{{ gt.amount|floatformat:0 }} FCFA</td>
+          <td>
+            {% if gt.status == 'SUCCESS' %}<span class="badge badge-success">{{ gt.get_status_display }}</span>
+            {% elif gt.status == 'PENDING' %}<span class="badge badge-warning">{{ gt.get_status_display }}</span>
+            {% else %}<span class="badge badge-danger">{{ gt.get_status_display }}</span>{% endif %}
+            {% if gt.is_sandbox %}<span class="badge badge-muted">sandbox</span>{% endif %}
+          </td>
+          <td>
+            {% if gt.is_sandbox and gt.status == 'PENDING' %}
+            <form method="post" action="{% url 'collections' %}">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="simulate">
+              <input type="hidden" name="pk" value="{{ gt.pk }}">
+              <button type="submit" class="btn btn-small btn-outline">{% trans "Simuler la validation client" %}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">{% trans "Aucune collection pour le moment — créez une demande ci-dessus." %}</p>
+  {% endif %}
+</section>
+{% endblock %}

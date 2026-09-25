@@ -27,6 +27,7 @@ from finance.viewsets import (
     PaymentViewSet,
     ExpenseViewSet,
 )
+from finance.webhook import GatewayWebhookView
 from reporting.views import (
     DashboardSummaryView,
     ForecastView,
@@ -75,6 +76,13 @@ urlpatterns = [
 
     # Assistant TresorIA
     path("api/assistant/ask/", AskView.as_view(), name="assistant_ask"),
+
+    # Passerelles Mobile Money — webhook opérateurs (signature HMAC)
+    path(
+        "api/gateways/webhook/<str:operator>/",
+        GatewayWebhookView.as_view(),
+        name="gateway_webhook",
+    ),
 
     # Documentation API
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

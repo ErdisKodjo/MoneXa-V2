@@ -83,6 +83,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "webui.context_processors.notifications",
             ],
         },
     },
@@ -225,6 +226,32 @@ OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
 GEMINI_VISION_MODEL = config("GEMINI_VISION_MODEL", default="gemini-2.0-flash")
 OPENAI_VISION_MODEL = config("OPENAI_VISION_MODEL", default="gpt-4o-mini")
+
+# ──────────────────────────────────────────────────────────────────────────
+# Trésorerie — saisonnalité & passerelles Mobile Money
+# ──────────────────────────────────────────────────────────────────────────
+# Jours de marché boostés dans les prévisions (0=lundi … 6=dimanche).
+# Défaut « 5 » = grand marché du samedi, typique des PME ouest-africaines.
+MARKET_DAYS = config("MARKET_DAYS", default="5")
+
+# Préfixes opérateurs Togo (+228) — détection fraude « numéro usurpé »
+MONEXA_OPERATOR_PREFIXES = {
+    "TMONEY": ("90", "91", "92", "93"),   # Togocom / T-Money
+    "MOOV": ("94", "95"),                 # Moov Money
+    "FLOOZ": ("96", "97"),                # Flooz
+}
+
+# Passerelles de collecte Mobile Money (sandbox si non configuré)
+TMONEY_COLLECTION_URL = config("TMONEY_COLLECTION_URL", default="")
+TMONEY_API_KEY = config("TMONEY_API_KEY", default="")
+TMONEY_API_SECRET = config("TMONEY_API_SECRET", default="")
+MOOV_COLLECTION_URL = config("MOOV_COLLECTION_URL", default="")
+MOOV_API_KEY = config("MOOV_API_KEY", default="")
+MOOV_API_SECRET = config("MOOV_API_SECRET", default="")
+FLOOZ_COLLECTION_URL = config("FLOOZ_COLLECTION_URL", default="")
+FLOOZ_API_KEY = config("FLOOZ_API_KEY", default="")
+FLOOZ_API_SECRET = config("FLOOZ_API_SECRET", default="")
+GATEWAY_WEBHOOK_SECRET = config("GATEWAY_WEBHOOK_SECRET", default="change-me-webhook-secret")
 
 # ──────────────────────────────────────────────────────────────────────────
 # Logging

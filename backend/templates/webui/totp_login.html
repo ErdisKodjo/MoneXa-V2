@@ -1,0 +1,51 @@
+{% load i18n %}<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Vérification 2FA" %} · MoneXa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/monexa.css">
+</head>
+<body class="login-page">
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-brand">
+      <span class="brand-badge" aria-hidden="true">M</span>
+      <span class="brand-text">Mone<span class="brand-accent">X</span>a</span>
+    </div>
+
+    <h1 class="login-title">{% trans "Vérification en deux étapes" %}</h1>
+    <p class="login-sub">
+      {% if pending_user %}{% blocktrans with name=pending_user.display_name %}Compte {{ name }}{% endblocktrans %} — {% endif %}
+      {% trans "Saisissez le code à 6 chiffres de votre application d'authentification." %}
+    </p>
+
+    {% if messages %}
+    <div class="flash-stack" role="status">
+      {% for message in messages %}
+      <div class="flash flash-{{ message.tags|default:'info' }}"><p class="flash-text">{{ message }}</p></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="login-form">
+      {% csrf_token %}
+      <div class="field">
+        <label for="id_code">{% trans "Code d'authentification" %}</label>
+        {{ form.code }}
+        {% if form.code.errors %}<p class="field-error">{{ form.code.errors.0 }}</p>{% endif %}
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">{% trans "Vérifier et se connecter" %}</button>
+    </form>
+
+    <p class="login-hint">
+      <a href="{% url 'login' %}">{% trans "Revenir à la connexion" %}</a>
+    </p>
+  </div>
+  <footer class="login-footer">MoneXa — {% trans "CFO virtuel pour PME ouest-africaines" %} · ESIG Tech Arena 2026</footer>
+</div>
+</body>
+</html>

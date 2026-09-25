@@ -125,14 +125,17 @@ MoneXa-V2/
 
 ## ⚡ Fonctionnalités principales
 
-- 📸 **Extraction multimodale de preuves** — Photographiez un reçu ou un écran SMS, l'IA extrait instantanément la référence opérateur, le montant, la date et le payeur (Pydantic validation).
+- 📸 **Extraction multimodale de preuves** — Photographiez un reçu ou un écran SMS, l'IA extrait instantanément la référence opérateur, le montant, la date et le payeur (Pydantic validation). **V2.1 : 3 niveaux — LLM Vision → OCR Tesseract local + parser SMS déterministe → mock ; 100 % hors-ligne possible.**
 - 🔗 **Cascade de réconciliation automatique** — Matching intelligent à 4 niveaux : référence exacte → montant + date sous 7j → fuzzy payeur → file `A_VALIDER`.
+- 💰 **Encaissement direct Mobile Money (V2.1)** — Push de collecte T-Money / Moov / Flooz vers le client, webhook opérateur signé HMAC, conversion automatique en paiement réconcilié + audit.
 - 🛡️ **Audit immuable cryptographique** — Journalisation hash-chainée SHA-256. Toute altération en base brise la chaîne d'intégrité, détectable via `verify_chain()`.
 - 💬 **TresorIA** — Chatbot CFO en langage naturel. Alimenté par 15 KPIs pré-calculés. **Jamais** de SQL direct généré par le LLM.
-- 📈 **Prévisions de trésorerie J+7 et J+30** — Lissage exponentiel triple (Holt-Winters) sur 90 jours d'historique, intervalle de confiance à 80%.
-- 🚨 **Détection d'anomalies hybride** — Règles déterministes (doublon, écart montant, hors fenêtre, paiement nocturne) + scoring ML Isolation Forest.
-- 📱 **Mobile Offline-First & trilingue** — Cache Hive, sync différée, interface **Français / Ewé / Kabyé**.
-- 📄 **Exports SYSCOHADA & CSV** — Journal de caisse, journal de banque, balance au format OHADA.
+- 📈 **Prévisions de trésorerie J+7 et J+30** — Lissage exponentiel triple (Holt-Winters) sur 90 jours d'historique, intervalle de confiance à 80%. **V2.1 : saisonnalité « jours de marché » calibrée sur l'historique.**
+- 🚨 **Détection d'anomalies hybride** — Règles déterministes (doublon, écart montant, hors fenêtre, paiement nocturne) + scoring ML Isolation Forest. **V2.1 : scan anti-fraude SMS (numéros usurpés, références falsifiées, rafales, hameçonnage).**
+- 🔐 **2FA TOTP côté web (V2.1)** — Activation par QR code pour le Gérant, connexion en deux étapes, anti-replay.
+- 🔔 **Notifications in-app (V2.1)** — Rappels de factures échues et file de validation, commande `send_reminders` cron-able.
+- 📱 **Mobile Offline-First & trilingue** — Cache Hive, sync différée, interface **Français / Ewé / Kabyé**. **V2.1 : file de sync offline Hive — un reçu photographié sans réseau part automatiquement au retour du réseau.**
+- 📄 **Exports SYSCOHADA, CSV & PDF (V2.1)** — Journal de caisse et bilan de trésorerie PDF présentables (charte MoneXa), CSV Excel.
 
 ---
 
@@ -160,14 +163,18 @@ Voir [`docs/architecture.md`](docs/architecture.md) pour le diagramme complet.
 | Écran | Route | Rôle minimum |
 |---|---|---|
 | Connexion (sessions, CSRF) | `/login/` | public |
+| Vérification 2FA TOTP | `/login/totp/` | public (compte 2FA) |
 | Dashboard KPIs + graphes CSS | `/dashboard/` | connecté |
 | Factures (liste, filtres, création) | `/factures/` | connecté (scoping caissier) |
 | Paiements (upload preuve IA, SMS, validation) | `/paiements/` | connecté (validation : comptable+) |
+| Encaissements Mobile Money (collecte) | `/encaissements/` | comptable+ |
 | Dépenses (liste, création) | `/depenses/` | connecté (scoping caissier) |
-| Anomalies (règles + Isolation Forest) | `/anomalies/` | gérant |
+| Notifications (cloche, rappels) | `/notifications/` | connecté |
+| Anomalies (règles + fraude SMS + Isolation Forest) | `/anomalies/` | gérant |
 | Journal d'audit immuable + verify_chain | `/audit/` | gérant |
+| Sécurité (2FA TOTP, pipeline IA) | `/securite/` | gérant |
 | TresorIA chatbot | `/assistant/` | connecté |
-| Exports CSV | `/exports/` | comptable+ |
+| Exports CSV + PDF | `/exports/` | comptable+ |
 
 ---
 

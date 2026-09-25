@@ -10,7 +10,8 @@ Détection d'anomalies hybride (cahier des charges §13.2):
    - Paiements atypiques (montant inhabituel, horaire inhabituel, canal inhabituel)
 """
 from __future__ import annotations
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from decimal import Decimal
 
@@ -97,7 +98,132 @@ def detect_anomalies(payment: Payment) -> List[dict]:
             "payment_id": payment.id,
         })
 
+    anomalies.extend(_detect_fraud_rules(payment))
     return anomalies
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Règles anti-fraude SMS (v2.1) — numéros usurpés, refs falsifiées, rafales
+# ──────────────────────────────────────────────────────────────────────────
+
+# Préfixes opérateurs Togo (+228) — surchargeables via MONEXA_OPERATOR_PREFIXES
+DEFAULT_OPERATOR_PREFIXES = {
+    "TMONEY": ("90", "91", "92", "93"),
+    "MOOV": ("94", "95"),
+    "FLOOZ": ("96", "97"),
+}
+
+_PHISHING_KEYWORDS = (
+    "pin", "code secret", "otp", "mot de passe",
+    "envoyez votre", "transferez", "transfère", "envoyer l'argent",
+    "urgent", "compte bloqué", "compte bloque", "gagner", "loterie",
+)
+
+
+def _operator_prefixes() -> dict:
+    """Mapping canal → préfixes valides (settings surcharge possible)."""
+    from django.conf import settings
+
+    return getattr(settings, "MONEXA_OPERATOR_PREFIXES", DEFAULT_OPERATOR_PREFIXES)
+
+
+def _detect_fraud_rules(payment: Payment) -> List[dict]:
+    anomalies: List[dict] = []
+
+    phone_digits = re.sub(r"\D", "", payment.payer_phone or "")
+    # Numéro local à 8 chiffres (on ignore l'indicatif +228)
+    if len(phone_digits) > 8:
+        phone_digits = phone_digits[-8:]
+    local_prefix = phone_digits[:2]
+
+    # Rule 5 — Numéro émetteur incompatible avec le canal déclaré
+    prefixes = _operator_prefixes()
+    if payment.channel in prefixes and local_prefix:
+        valid = prefixes[payment.channel]
+        if local_prefix not in valid:
+            anomalies.append({
+                "severity": SEVERITY_WARNING,
+                "type": "Numéro incompatible avec le canal",
+                "description": (
+                    f"{payment.provider_ref} — payeur {payment.payer_phone} mais canal "
+                    f"{payment.get_channel_display()} (préfixes attendus : {', '.join(valid)})"
+                ),
+                "payment_id": payment.id,
+            })
+
+    # Rule 6 — Référence opérateur falsifiée (préfixe de référence ≠ canal)
+    ref_prefixes = {"TMONEY": "TMX", "MOOV": ("MV", "MP"), "FLOOZ": "FL"}
+    expected = ref_prefixes.get(payment.channel)
+    if expected:
+        ref = (payment.provider_ref or "").upper()
+        if ref and not ref.startswith(tuple(expected)):
+            anomalies.append({
+                "severity": SEVERITY_WARNING,
+                "type": "Référence suspecte",
+                "description": (
+                    f"{payment.provider_ref} — le format de la référence ne correspond "
+                    f"pas au canal {payment.get_channel_display()} (attendu : {'/'.join(expected)})"
+                ),
+                "payment_id": payment.id,
+            })
+
+    # Rule 7 — Rafale de paiements du même émetteur (≥3 en 10 minutes)
+    if payment.payer_phone:
+        window_start = payment.paid_at - timedelta(minutes=10)
+        window_end = payment.paid_at + timedelta(minutes=10)
+        burst = Payment.objects.filter(
+            payer_phone=payment.payer_phone,
+            paid_at__gte=window_start,
+            paid_at__lte=window_end,
+        ).exclude(pk=payment.pk).count()
+        if burst >= 2:
+            anomalies.append({
+                "severity": SEVERITY_CRITICAL,
+                "type": "Rafale de paiements",
+                "description": (
+                    f"{payment.provider_ref} — {burst + 1} paiements du même numéro "
+                    f"{payment.payer_phone} en moins de 10 minutes (fraude / cash-out suspect)"
+                ),
+                "payment_id": payment.id,
+            })
+
+    # Rule 8 — SMS d'hameçonnage (mots-clés frauduleux dans le texte extrait)
+    raw = (payment.raw_text or "").lower()
+    if raw and any(kw in raw for kw in _PHISHING_KEYWORDS):
+        hit = next(kw for kw in _PHISHING_KEYWORDS if kw in raw)
+        anomalies.append({
+            "severity": SEVERITY_CRITICAL,
+            "type": "SMS suspect (hameçonnage)",
+            "description": (
+                f"{payment.provider_ref} — le texte contient le mot-clé sensible "
+                f"« {hit} » : vérifier qu'il s'agit d'un SMS opérateur authentique"
+            ),
+            "payment_id": payment.id,
+        })
+
+    return anomalies
+
+
+def scan_recent_fraud(limit: int = 200) -> List[dict]:
+    """
+    Scan anti-fraude des derniers paiements (tous statuts confondus).
+    Utilisé par la page Anomalies pour attraper les fraudes détectées
+    après ingestion (numéro usurpé, rafale, SMS hameçonnage…).
+    """
+    out: List[dict] = []
+    seen_ids: set = set()
+    for p in Payment.objects.order_by("-paid_at")[:limit]:
+        for a in _detect_fraud_rules(p):
+            key = (p.id, a.get("type", ""))
+            if key not in seen_ids:
+                seen_ids.add(key)
+                out.append({
+                    "payment": p,
+                    "type": a.get("type", ""),
+                    "description": a.get("description", ""),
+                    "severity": a.get("severity", ""),
+                })
+    return out
 
 
 def score_isolation_forest() -> List[dict]:

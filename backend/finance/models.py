@@ -264,3 +264,50 @@ class ForecastCache(models.Model):
 
     def __str__(self) -> str:
         return f"Forecast J+{self.days} (généré {self.generated_at:%Y-%m-%d %H:%M})"
+
+
+class GatewayTransactionStatus(models.TextChoices):
+    PENDING = "PENDING", "En attente (push envoyé)"
+    SUCCESS = "SUCCESS", "Succès"
+    FAILED = "FAILED", "Échec"
+    EXPIRED = "EXPIRED", "Expiré"
+
+
+class GatewayTransaction(models.Model):
+    """
+    Demande de collecte Mobile Money (T-Money / Moov / Flooz).
+
+    Flux : le Caissier demande le paiement d'une facture par téléphone du
+    client → push USSD / API collection opérateur → le client valide sur
+    son téléphone → le webhook opérateur (ou le polling) confirme SUCCESS.
+    En sandbox (aucune clé configurée), la réponse est simulée de façon
+    déterministe pour la démonstration.
+    """
+    invoice = models.ForeignKey(
+        Invoice, on_delete=models.CASCADE, related_name="gateway_transactions",
+        verbose_name="Facture à encaisser",
+    )
+    operator = models.CharField(max_length=20, choices=Channel.choices, verbose_name="Opérateur")
+    phone = models.CharField(max_length=20, verbose_name="Téléphone débité")
+    amount = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Montant (FCFA)")
+    gateway_tx_id = models.CharField(max_length=60, unique=True, db_index=True, verbose_name="ID opérateur")
+    status = models.CharField(
+        max_length=20, choices=GatewayTransactionStatus.choices,
+        default=GatewayTransactionStatus.PENDING, db_index=True,
+    )
+    is_sandbox = models.BooleanField(default=True, verbose_name="Sandbox")
+    raw_response = models.JSONField(default=dict, blank=True, verbose_name="Réponse brute opérateur")
+    initiated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="gateway_transactions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Transaction passerelle"
+        verbose_name_plural = "Transactions passerelles"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["status", "created_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.gateway_tx_id} — {self.amount:,.0f} FCFA ({self.operator}, {self.status})"

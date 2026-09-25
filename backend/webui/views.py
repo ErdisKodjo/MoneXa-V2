@@ -15,44 +15,66 @@ RBAC (docs/rbac-matrix.md) :
 """
 from __future__ import annotations
 
+import base64
 import csv
 import io
 
+import qrcode
 from django.contrib import messages
+from django.contrib.auth import get_user_model, login as auth_login
 from django.contrib.auth.views import LoginView as DjangoLoginView, LogoutView as DjangoLogoutView
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import CreateView, FormView, ListView, TemplateView
+from django_otp import login as otp_login
+from django_otp.plugins.otp_totp.models import TOTPDevice
 
+from accounts.models import Notification
 from auditing.models import AuditLog
 from auditing.services import verify_chain
 from assistant.services import answer_question
 from finance.models import (
     Channel,
     Expense,
+    GatewayTransaction,
+    GatewayTransactionStatus,
     Invoice,
     MatchMethod,
     Payment,
     PaymentStatus,
     InvoiceStatus,
 )
-from finance.services.ai_pipeline import extract_payment_from_image, extract_payment_from_text
-from finance.services.anomalies import detect_anomalies, score_isolation_forest
+from finance.services.ai_pipeline import (
+    extract_payment_from_image,
+    extract_payment_from_text,
+    pipeline_status,
+)
+from finance.services.anomalies import detect_anomalies, scan_recent_fraud, score_isolation_forest
+from finance.services.gateways import (
+    check_status,
+    confirm_gateway_transaction,
+    is_live,
+    request_collection,
+)
 from finance.services.matcher import match_payment
+from reporting.pdf import bilan_pdf, journal_caisse_pdf
 from reporting.services import compute_kpis
 
 from .forms import (
     AssistantQuestionForm,
+    CollectionForm,
     ExpenseForm,
     InvoiceForm,
     MoneXaLoginForm,
     PaymentEvidenceForm,
     PaymentSmsForm,
+    TOTPCodeForm,
 )
 from .mixins import CaissierRequiredMixin, ComptableRequiredMixin, GerantRequiredMixin
 
@@ -63,13 +85,26 @@ PAGE_SIZE = 15
 # Authentification (sessions — Django natif, CSRF protégé)
 # ═══════════════════════════════════════════════════════════════════════════
 class WebLoginView(DjangoLoginView):
-    """Connexion web MVT — email + mot de passe, sessions Django."""
+    """Connexion web MVT — email + mot de passe, sessions Django.
+
+    Si le compte a la 2FA TOTP activée, la connexion passe par une seconde
+    étape (/login/totp/) avant l'ouverture de session effective.
+    """
 
     template_name = "webui/login.html"
     authentication_form = MoneXaLoginForm
     redirect_authenticated_user = True
 
     def form_valid(self, form):
+        user = form.get_user()
+        if user.is_2fa_enabled and user.totpdevice_set.filter(confirmed=True).exists():
+            self.request.session["monexa_2fa_uid"] = user.pk
+            self.request.session["monexa_2fa_at"] = timezone.now().isoformat()
+            messages.info(
+                self.request,
+                _("Mot de passe accepté — saisissez le code de votre application d'authentification."),
+            )
+            return redirect("totp_login")
         messages.success(
             self.request,
             _("Bienvenue %(name)s — rôle : %(role)s.")
@@ -437,8 +472,9 @@ class AnomaliesView(GerantRequiredMixin, TemplateView):
                     "severity": a.get("severity", ""),
                 })
         ctx["rule_based"] = rule_based
+        ctx["fraud"] = scan_recent_fraud(limit=200)
         ctx["ml_flagged"] = score_isolation_forest()
-        ctx["total"] = len(rule_based) + len(ctx["ml_flagged"])
+        ctx["total"] = len(rule_based) + len(ctx["fraud"]) + len(ctx["ml_flagged"])
         return ctx
 
 
@@ -567,3 +603,236 @@ class ExpenseExportView(_CsvExportView):
             }
             for e in Expense.objects.order_by("-paid_at")
         ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2FA TOTP — activation, confirmation, désactivation (Gérant)
+# ═══════════════════════════════════════════════════════════════════════════
+def _qr_data_uri(payload: str) -> str:
+    """QR code (otpauth://) encodé en data URI PNG — aucun fichier disque."""
+    img = qrcode.make(payload)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+class SecurityView(GerantRequiredMixin, TemplateView):
+    """Page Sécurité — activation 2FA TOTP + diagnostic du pipeline IA."""
+
+    template_name = "webui/security.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+        ctx["is_2fa_enabled"] = user.is_2fa_enabled
+        ctx["pending_device"] = user.totpdevice_set.filter(confirmed=False).first()
+        ctx["active_device"] = user.totpdevice_set.filter(confirmed=True).first()
+        ctx["totp_form"] = TOTPCodeForm()
+        if ctx["pending_device"]:
+            ctx["qr"] = _qr_data_uri(ctx["pending_device"].config_url)
+        ctx["pipeline"] = pipeline_status()
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action", "")
+        user = request.user
+
+        if action == "enable":
+            user.totpdevice_set.filter(confirmed=False).delete()
+            TOTPDevice.objects.create(user=user, name="MoneXa Web", confirmed=False)
+            messages.info(
+                request,
+                _("Scannez le QR code avec Google Authenticator / Authy, puis validez avec un code."),
+            )
+            return redirect("security")
+
+        if action == "confirm":
+            device = user.totpdevice_set.filter(confirmed=False).first()
+            if not device:
+                messages.error(request, _("Aucune activation en cours. Cliquez d'abord sur « Activer la 2FA »."))
+                return redirect("security")
+            form = TOTPCodeForm(request.POST)
+            if form.is_valid() and device.verify_token(int(form.cleaned_data["code"])):
+                device.confirmed = True
+                device.save(update_fields=["confirmed"])
+                user.is_2fa_enabled = True
+                user.save(update_fields=["is_2fa_enabled"])
+                messages.success(request, _("2FA activée — votre compte est protégé."))
+            else:
+                messages.error(request, _("Code invalide. Vérifiez l'heure de votre téléphone et réessayez."))
+            return redirect("security")
+
+        if action == "disable":
+            user.totpdevice_set.all().delete()
+            user.is_2fa_enabled = False
+            user.save(update_fields=["is_2fa_enabled"])
+            messages.warning(request, _("2FA désactivée — pensez à la réactiver après la démo."))
+            return redirect("security")
+
+        messages.error(request, _("Action inconnue."))
+        return redirect("security")
+
+
+class TOTPLoginView(FormView):
+    """Seconde étape de connexion pour les comptes avec 2FA activée."""
+
+    template_name = "webui/totp_login.html"
+    form_class = TOTPCodeForm
+    success_url = reverse_lazy("dashboard")
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.session.get("monexa_2fa_uid"):
+            return redirect("login")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        User = get_user_model()
+        ctx["pending_user"] = User.objects.filter(pk=self.request.session.get("monexa_2fa_uid")).first()
+        return ctx
+
+    def form_valid(self, form):
+        User = get_user_model()
+        uid = self.request.session.get("monexa_2fa_uid")
+        user = User.objects.filter(pk=uid, is_active=True).first()
+        if not user:
+            self.request.session.pop("monexa_2fa_uid", None)
+            return redirect("login")
+        device = user.totpdevice_set.filter(confirmed=True).first()
+        if device and device.verify_token(int(form.cleaned_data["code"])):
+            auth_login(self.request, user)
+            otp_login(self.request, device)  # django_otp : user.is_verified() = True
+            self.request.session.pop("monexa_2fa_uid", None)
+            self.request.session.pop("monexa_2fa_at", None)
+            messages.success(
+                self.request,
+                _("Bienvenue %(name)s — 2FA validée.")
+                % {"name": user.display_name},
+            )
+            return super().form_valid(form)
+        form.add_error("code", _("Code incorrect ou expiré. Réessayez."))
+        return self.form_invalid(form)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Notifications in-app — cloche + page + marquage lu
+# ═══════════════════════════════════════════════════════════════════════════
+class NotificationsView(CaissierRequiredMixin, ListView):
+    template_name = "webui/notifications.html"
+    context_object_name = "notifications"
+    paginate_by = 20
+
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user).order_by("-created_at")
+
+
+class NotificationReadView(CaissierRequiredMixin, View):
+    """POST /notifications/<pk>/lu/ — marque une notification comme lue."""
+
+    def post(self, request, pk):
+        notification = get_object_or_404(Notification, pk=pk, user=request.user)
+        notification.is_read = True
+        notification.save(update_fields=["is_read"])
+        return redirect("notifications")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Encaissements Mobile Money — collecte T-Money / Moov / Flooz (Comptable+)
+# ═══════════════════════════════════════════════════════════════════════════
+class CollectionView(ComptableRequiredMixin, TemplateView):
+    """Encaisser une facture par Mobile Money (push client) + suivi statuts."""
+
+    template_name = "webui/collections.html"
+
+    def _refresh_pending(self, request):
+        """Rafraîchit les collections en attente ; à SUCCESS → paiement + réconciliation."""
+        for gt in GatewayTransaction.objects.filter(status=GatewayTransactionStatus.PENDING)[:20]:
+            check_status(gt)
+            if gt.status == GatewayTransactionStatus.SUCCESS:
+                confirm_gateway_transaction(gt)
+                messages.success(
+                    request,
+                    _("Collection %(tx)s confirmée — paiement créé et passé en réconciliation.")
+                    % {"tx": gt.gateway_tx_id},
+                )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        self._refresh_pending(self.request)
+        ctx["form"] = CollectionForm()
+        ctx["transactions"] = GatewayTransaction.objects.select_related("invoice", "initiated_by")[:30]
+        ctx["live_modes"] = {
+            op: is_live(op) for op in ("TMONEY", "MOOV", "FLOOZ")
+        }
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action", "")
+
+        if action == "request":
+            form = CollectionForm(request.POST)
+            if form.is_valid():
+                gt = request_collection(
+                    invoice=form.cleaned_data["invoice"],
+                    operator=form.cleaned_data["operator"],
+                    phone=form.cleaned_data["phone"],
+                    initiated_by=request.user,
+                )
+                mode = _("production") if not gt.is_sandbox else _("sandbox")
+                messages.success(
+                    request,
+                    _("Demande envoyée au client (%(mode)s) — référence opérateur %(tx)s.")
+                    % {"mode": mode, "tx": gt.gateway_tx_id},
+                )
+            else:
+                messages.error(request, _("Formulaire invalide : vérifiez la facture, l'opérateur et le numéro."))
+            return redirect("collections")
+
+        if action == "simulate":
+            gt = get_object_or_404(
+                GatewayTransaction, pk=request.POST.get("pk", 0)
+            )
+            if gt.is_sandbox and gt.status == GatewayTransactionStatus.PENDING:
+                gt.status = GatewayTransactionStatus.SUCCESS
+                gt.raw_response = {
+                    **gt.raw_response,
+                    "sandbox_confirmed_at": timezone.now().isoformat(),
+                    "message": "Validation client simulée (bouton démo).",
+                }
+                gt.save(update_fields=["status", "raw_response", "updated_at"])
+                confirm_gateway_transaction(gt)
+                messages.success(
+                    request,
+                    _("Validation client simulée — paiement %(amount)s FCFA créé et réconcilié.")
+                    % {"amount": gt.amount},
+                )
+            else:
+                messages.error(request, _("Seule une collection sandbox en attente peut être simulée."))
+            return redirect("collections")
+
+        messages.error(request, _("Action inconnue."))
+        return redirect("collections")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Exports PDF — journal de caisse + bilan (Comptable+)
+# ═══════════════════════════════════════════════════════════════════════════
+class JournalCaissePDFView(ComptableRequiredMixin, View):
+    def get(self, request):
+        data = journal_caisse_pdf(Payment.objects.all())
+        response = HttpResponse(data, content_type="application/pdf")
+        response["Content-Disposition"] = 'attachment; filename="monexa_journal_caisse.pdf"'
+        return response
+
+
+class BilanPDFView(ComptableRequiredMixin, View):
+    def get(self, request):
+        try:
+            days = int(request.GET.get("days", 30))
+        except (TypeError, ValueError):
+            days = 30
+        days = max(1, min(days, 365))
+        data = bilan_pdf(days=days)
+        response = HttpResponse(data, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="monexa_bilan_{days}j.pdf"'
+        return response

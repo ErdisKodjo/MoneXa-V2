@@ -1,13 +1,13 @@
 {% extends "webui/base.html" %}
 {% load i18n %}
 
-{% block title %}{% trans "Exports CSV" %}{% endblock %}
+{% block title %}{% trans "Exports" %}{% endblock %}
 
 {% block content %}
 <div class="page-head">
   <div>
-    <h1 class="page-title">{% trans "Exports CSV" %}</h1>
-    <p class="page-sub">{% trans "Journaux comptables prêts pour Excel — encodage UTF-8, séparateur point-virgule, format SYSCOHADA simplifié." %}</p>
+    <h1 class="page-title">{% trans "Exports comptables" %}</h1>
+    <p class="page-sub">{% trans "CSV pour Excel et PDF présentables — en-tête charte, totaux, horodatage." %}</p>
   </div>
 </div>
 
@@ -23,6 +23,7 @@
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
       {% trans "Télécharger CSV" %}
     </a>
+    <a class="btn btn-ghost" href="{% url 'export_pdf_journal' %}" style="margin-top:.5rem">{% trans "Journal de caisse PDF" %}</a>
   </section>
 
   <section class="card export-card">
@@ -36,6 +37,17 @@
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
       {% trans "Télécharger CSV" %}
     </a>
+  </section>
+
+  <section class="card export-card">
+    <span class="kpi-icon kpi-icon-green">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>
+    </span>
+    <h2 class="card-title">{% trans "Bilan de trésorerie PDF" %}</h2>
+    <p class="export-count">30 {% trans "jours par défaut" %}</p>
+    <p class="export-desc">{% trans "Encaissements par canal, dépenses par catégorie, solde net, paiements en attente — présentable à la banque." %}</p>
+    <a class="btn btn-primary" href="{% url 'export_pdf_bilan' %}?days=30">{% trans "Bilan 30 jours PDF" %}</a>
+    <a class="btn btn-ghost" href="{% url 'export_pdf_bilan' %}?days=90" style="margin-top:.5rem">{% trans "Bilan 90 jours PDF" %}</a>
   </section>
 </div>
 

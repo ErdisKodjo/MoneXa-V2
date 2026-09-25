@@ -38,6 +38,12 @@
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
         <span>{% trans "Paiements" %}</span>
       </a>
+      {% if user.is_comptable_or_higher %}
+      <a class="nav-item {% if request.resolver_match.url_name == 'collections' %}is-active{% endif %}" href="{% url 'collections' %}">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4"/></svg>
+        <span>{% trans "Encaissements" %}</span>
+      </a>
+      {% endif %}
       <a class="nav-item {% if request.resolver_match.url_name == 'expenses' or request.resolver_match.url_name == 'expense_create' %}is-active{% endif %}" href="{% url 'expenses' %}">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17l-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/></svg>
         <span>{% trans "Dépenses" %}</span>
@@ -62,6 +68,10 @@
       <a class="nav-item {% if request.resolver_match.url_name == 'audit' %}is-active{% endif %}" href="{% url 'audit' %}">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <span>{% trans "Journal d'audit" %}</span>
+      </a>
+      <a class="nav-item {% if request.resolver_match.url_name == 'security' %}is-active{% endif %}" href="{% url 'security' %}">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span>{% trans "Sécurité" %}</span>
       </a>
       {% endif %}
     </nav>
@@ -95,6 +105,12 @@
       </form>
 
       <div class="topbar-right">
+        {% if user.is_authenticated and nav_unread_count > 0 %}
+        <a class="notif-bell" href="{% url 'notifications' %}" title="{% trans 'Notifications non lues' %}" aria-label="{% trans 'Notifications non lues' %}">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notif-badge">{{ nav_unread_count }}</span>
+        </a>
+        {% endif %}
         <form class="lang-form" method="post" action="{% url 'set_language' %}">
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.path }}">

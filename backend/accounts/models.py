@@ -65,3 +65,38 @@ class User(AbstractUser):
         if self.get_full_name():
             return self.get_full_name()
         return self.email
+
+
+class Notification(models.Model):
+    """
+    Notification in-app (cloche web) — rappels factures impayées, alertes
+    passerelles, décisions de validation. Un jour : relai FCM/SMS.
+    """
+    KIND_CHOICES = [
+        ("RAPPEL_FACTURE", "Rappel facture impayée"),
+        ("PASSERELLE", "Passerelle Mobile Money"),
+        ("ANOMALIE", "Anomalie détectée"),
+        ("VALIDATION", "Paiement à valider"),
+        ("INFO", "Information"),
+    ]
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="notifications", verbose_name="Destinataire"
+    )
+    kind = models.CharField(max_length=30, choices=KIND_CHOICES, default="INFO", db_index=True)
+    title = models.CharField(max_length=200, verbose_name="Titre")
+    body = models.TextField(blank=True, default="", verbose_name="Message")
+    url = models.CharField(
+        max_length=200, blank=True, default="",
+        help_text="Lien interne (ex. /factures/) cliquable depuis la cloche.",
+    )
+    is_read = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "notification"
+        verbose_name_plural = "notifications"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "is_read"])]
+
+    def __str__(self) -> str:
+        return f"{self.title} → {self.user.email}"
