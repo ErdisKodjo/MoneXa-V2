@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:monexa/features/assistant/presentation/screens/assistant_screen.dart';
+import 'package:monexa/features/dashboard/data/dashboard_repository.dart';
+
+/// Repository factice : échec immédiat, déterministe (aucune socket réseau,
+/// aucun timer de timeout Dio en attente) — le flux de secours est identique
+/// à une erreur réseau réelle.
+class _FailingRepo extends DashboardRepository {
+  @override
+  Future<String> askTresoria(String question) async {
+    throw StateError('Test : réseau désactivé (repo factice)');
+  }
+}
 
 void main() {
   group('AssistantScreen (TresorIA) tests', () {
@@ -20,9 +31,11 @@ void main() {
     });
 
     testWidgets('envoie une question et affiche la bulle utilisateur', (tester) async {
-      // Repository réseau réel non appelé : l'erreur réseau produit la bulle
-      // de secours — ce test vérifie surtout le flux UI local.
-      await tester.pumpWidget(const MaterialApp(home: AssistantScreen()));
+      // Repository factice injecté : l'erreur immédiate produit la bulle de
+      // secours — ce test vérifie le flux UI local sans toucher au réseau.
+      await tester.pumpWidget(
+        MaterialApp(home: AssistantScreen(repo: _FailingRepo())),
+      );
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
       await tester.enterText(find.byType(TextField), 'Test question démo');

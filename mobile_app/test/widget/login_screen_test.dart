@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:monexa/core/constants/app_constants.dart';
 import 'package:monexa/features/auth/data/auth_repository.dart';
 import 'package:monexa/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:monexa/features/auth/presentation/screens/login_screen.dart';

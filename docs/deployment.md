@@ -86,6 +86,63 @@ Le backend est déployable sur Render ou Railway :
    - `CORS_ALLOWED_ORIGINS=https://monexa-app.vercel.app`
 6. Post-deploy : `python manage.py migrate && python manage.py seed_demo`
 
+## Option 4 — Railway (config prête dans le repo, 5 minutes)
+
+Le dépôt contient tout ce qu'il faut : un `Dockerfile` racine (écoute sur `$PORT`,
+migrate + seed_demo + collectstatic automatiques au démarrage) et un `railway.json`
+(healthcheck `/login/`, restart ON_FAILURE). Aucune commande build/start à saisir.
+
+### A. Via le dashboard (recommandé)
+
+1. **railway.app** → `New Project` → `Deploy from GitHub repo` → `ErdisKodjo/MoneXa-V2` (branche `main`).
+   Railway lit `railway.json` et build le `Dockerfile` racine automatiquement.
+2. Une fois le service créé : `+ New` → `Database` → `Add PostgreSQL`.
+   Railway injecte `DATABASE_URL` dans le service web (réseau privé).
+3. Variables du service web (`Variables` → `New Variable`) :
+   - `SECRET_KEY` = `python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`
+   - `DEBUG=False`
+   - `CSRF_TRUSTED_ORIGINS=https://monexa-backend-production.up.railway.app` (adapter à l'URL générée à l'étape 4 ; redéploie auto)
+   - `CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080`
+   - `TREASORIA_USE_LLM=1` + `OPENAI_API_KEY` ou `GEMINI_API_KEY` (optionnel — fallback moteur de règles sinon)
+4. `Settings` → `Networking` → `Generate Domain` → obtenir `https://<nom>.up.railway.app`.
+5. Le déploie se relance : le healthcheck `/login/` passe au vert une fois
+   `migrate + seed_demo + collectstatic + gunicorn` terminés (compte 2-4 min).
+
+### B. Via la CLI (alternative)
+
+```bash
+npm i -g @railway/cli
+railway login
+railway init                       # dans le repo MoneXa
+railway add --database postgresql  # plugin Postgres
+railway variables set SECRET_KEY=... DEBUG=False \
+  CSRF_TRUSTED_ORIGINS=https://monexa-backend-production.up.railway.app
+railway up                         # build + deploy Dockerfile racine
+railway domain                     # génère l'URL publique
+```
+
+### Vérifier Railway
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://<votre-app>.up.railway.app/login/   # 200
+curl -s https://<votre-app>.up.railway.app/api/schema/swagger-ui/ | head -1          # Swagger UI
+# Les comptes démo existent déjà (seed_demo) : gerant@monexa.tg / Monexa2026!
+```
+
+### Pièges Railway connus
+
+- **403 sur le login web** : `CSRF_TRUSTED_ORIGINS` absente ou sans `https://` (schéma obligatoire).
+- **Healthcheck KO puis OK** : le conteneur exécute migrate/seed avant gunicorn — c'est normal (2-4 min).
+- **Build lent la 1re fois** : compilation psycopg2/Pillow — les builds suivants utilisent le cache.
+
+### APK mobile pointant sur Railway
+
+```bash
+cd mobile_app
+flutter build apk --release --dart-define=API_BASE_URL=https://<votre-app>.up.railway.app
+# APK : build/app/outputs/flutter-apk/app-release.apk
+```
+
 ## Vérifications post-déploiement
 
 ```bash

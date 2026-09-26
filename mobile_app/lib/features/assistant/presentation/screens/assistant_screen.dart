@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_recognition_result.dart' as stt_result;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../../../core/theme/app_colors.dart';
@@ -15,7 +16,10 @@ import '../../../dashboard/data/dashboard_repository.dart';
 /// téléphone. Si le micro est indisponible (permission refusée, moteur
 /// absent), le bouton disparaît et la saisie clavier reste fonctionnelle.
 class AssistantScreen extends StatefulWidget {
-  const AssistantScreen({super.key});
+  const AssistantScreen({super.key, DashboardRepository? repo}) : _injectedRepo = repo;
+
+  /// Injection optionnelle (tests) — null = repository réseau réel.
+  final DashboardRepository? _injectedRepo;
 
   @override
   State<AssistantScreen> createState() => _AssistantScreenState();
@@ -29,7 +33,9 @@ class _Msg {
 }
 
 class _AssistantScreenState extends State<AssistantScreen> {
-  final DashboardRepository _repo = DashboardRepository();
+  // Repository injecté par les tests, sinon client réseau réel.
+  late final DashboardRepository _repo =
+      widget._injectedRepo ?? DashboardRepository();
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final List<_Msg> _messages = [];
@@ -50,12 +56,14 @@ class _AssistantScreenState extends State<AssistantScreen> {
   @override
   void initState() {
     super.initState();
-    _messages.add(_Msg(
-      role: 'bot',
-      text: 'Bonjour ! Je suis TresorIA, votre CFO virtuel.\n'
-          'Posez-moi une question sur votre trésorerie — par texte ou à la voix.',
-      time: DateTime.now(),
-    ));
+    _messages.add(
+      _Msg(
+        role: 'bot',
+        text: 'Bonjour ! Je suis TresorIA, votre CFO virtuel.\n'
+            'Posez-moi une question sur votre trésorerie — par texte ou à la voix.',
+        time: DateTime.now(),
+      ),
+    );
     _initSpeech();
   }
 
@@ -102,14 +110,16 @@ class _AssistantScreenState extends State<AssistantScreen> {
     }
     try {
       await _speech.listen(
-        onResult: (stt.SpeechRecognitionResult result) {
+        onResult: (stt_result.SpeechRecognitionResult result) {
           if (!mounted) return;
           setState(() => _input.text = result.recognizedWords);
         },
-        listenFor: const Duration(seconds: 12),
-        pauseFor: const Duration(seconds: 3),
-        listenMode: stt.ListenMode.dictation,
-        localeId: 'fr_FR', // ee_KE / locales locales si le moteur du téléphone les expose
+        listenOptions: stt.SpeechListenOptions(
+          listenFor: const Duration(seconds: 12),
+          pauseFor: const Duration(seconds: 3),
+          listenMode: stt.ListenMode.dictation,
+          localeId: 'fr_FR', // ee_KE / locales locales si le moteur du téléphone les expose
+        ),
       );
       if (!mounted) return;
       setState(() => _listening = true);

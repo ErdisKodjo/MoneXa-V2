@@ -20,6 +20,10 @@ SECRET_KEY = config("SECRET_KEY", default="dev-insecure-key-change-me-in-prod")
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="*", cast=Csv())
 
+# Railway / Render : origines HTTPS de confiance pour les formulaires POST
+# (login web, TOTP…). Ex. CSRF_TRUSTED_ORIGINS=https://monexa-backend.up.railway.app
+CSRF_TRUSTED_ORIGINS = [o for o in config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv()) if o]
+
 # ──────────────────────────────────────────────────────────────────────────
 # Applications
 # ──────────────────────────────────────────────────────────────────────────
@@ -96,7 +100,7 @@ DATABASE_URL = config("DATABASE_URL", default="").strip()
 if DATABASE_URL and DATABASE_URL.startswith(("postgres://", "postgresql://", "postgres://", "sqlite:")):
     # Production PostgreSQL (ou sqlite explicite)
     import dj_database_url  # type: ignore
-    DATABASES = {"default": dj_database_url.parse(DATABASE_URL)}
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
 else:
     # Tests locaux SQLite — fallback automatique
     DATABASES = {

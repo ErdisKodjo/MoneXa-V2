@@ -80,7 +80,7 @@ class SyncQueue {
   int get pendingCount => _box?.length ?? 0;
 
   String _newId() =>
-      'pu-${DateTime.now().microsecondsSinceEpoch}-${pendingCount}';
+      'pu-${DateTime.now().microsecondsSinceEpoch}-$pendingCount';
 
   Future<void> enqueueImage(Uint8List bytes, String filename) async {
     await init();
