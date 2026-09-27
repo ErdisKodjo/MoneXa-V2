@@ -143,6 +143,26 @@ flutter build apk --release --dart-define=API_BASE_URL=https://<votre-app>.up.ra
 # APK : build/app/outputs/flutter-apk/app-release.apk
 ```
 
+## ✅ Déploiement RÉEL effectué (V2.6)
+
+Le projet tourne en production :
+
+| Élément | Valeur |
+|---|---|
+| URL publique | **https://backend-production-15c6.up.railway.app** |
+| Projet Railway | `MoneXa` — workspace « Desire kodjo A's Projects » (ID `fd0a79cf-73db-46a3-b15e-cecead6b19c4`) |
+| Services | `backend` (Dockerfile racine, source GitHub `ErdisKodjo/MoneXa-V2@main`) + `Postgres` (ghcr.io/railwayapp-templates/postgres-ssl:18) |
+| Port cible domaine | **8080** (Railway injecte `PORT=8080` ; le Dockerfile lie `${PORT:-8000}`) |
+| Variables | `SECRET_KEY` (aléatoire), `DEBUG=False`, `DATABASE_URL=${{Postgres.DATABASE_URL}}` (référence résolue auto), `CSRF_TRUSTED_ORIGINS=https://backend-production-15c6.up.railway.app` |
+| Vérifié en live | `/login/` → 200 · Swagger → 200 · Admin → 200 · JWT `gerant@monexa.tg` → 200 · `/api/dashboard/summary/` → données seed |
+
+Notes d'opération :
+- Le domaine Railway généré a été **câblé sur le port 8080** (mismatch 502 résolu).
+- L'APK embarque cette URL : `--dart-define=API_BASE_URL=https://backend-production-15c6.up.railway.app`.
+- Déploiement piloté via l'API GraphQL `backboard.railway.app/graphql/v2` avec le token workspace
+  (la CLI `railway` v5 exige un token compte via `me` — un token workspace passe par l'API directe).
+
+
 ## Vérifications post-déploiement
 
 ```bash

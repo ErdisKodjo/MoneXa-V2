@@ -7,7 +7,6 @@ plugins {
 android {
     namespace = "tg.monexa.monexa"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -34,6 +33,14 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    // L'outil llvm-strip du NDK n'est pas disponible dans cet environnement :
+    // on conserve les symboles pour éviter la tâche stripReleaseDebugSymbols.
+    packaging {
+        jniLibs {
+            keepDebugSymbols.add("**/*.so")
         }
     }
 }
