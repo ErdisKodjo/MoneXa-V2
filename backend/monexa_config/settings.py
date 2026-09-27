@@ -7,6 +7,7 @@ Production : PostgreSQL 16. Tests locaux : SQLite fallback automatique.
 from pathlib import Path
 from decouple import Config, RepositoryEnv, Csv
 import os
+from decimal import Decimal
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Lire UNIQUEMENT le .env du backend (ignore les .env globaux du sandbox)
@@ -51,6 +52,7 @@ INSTALLED_APPS = [
     "auditing",
     "reporting",
     "assistant",
+    "caisse",  # Système de caisse (POS) — cahier des charges entreprise v3.0 §5
     "webui",  # Couche MVT fonctionnelle (vues render + templates + forms)
 ]
 
@@ -261,6 +263,15 @@ FLOOZ_COLLECTION_URL = config("FLOOZ_COLLECTION_URL", default="")
 FLOOZ_API_KEY = config("FLOOZ_API_KEY", default="")
 FLOOZ_API_SECRET = config("FLOOZ_API_SECRET", default="")
 GATEWAY_WEBHOOK_SECRET = config("GATEWAY_WEBHOOK_SECRET", default="change-me-webhook-secret")
+
+# ──────────────────────────────────────────────────────────────────────────
+# Système de caisse (POS) — cahier des charges entreprise v3.0 §5
+# ──────────────────────────────────────────────────────────────────────────
+# Remises : plafond % par rôle (POS-02) — au-delà, validation comptable requise.
+CAISSE_REMISE_MAX_CAISSIER = Decimal(config("CAISSE_REMISE_MAX_CAISSIER", default="5.00"))
+CAISSE_REMISE_MAX_COMPTABLE = Decimal(config("CAISSE_REMISE_MAX_COMPTABLE", default="25.00"))
+# Clôture Z : écart espèces toléré avant flag anomalie automatique (POS-07).
+CAISSE_ECART_TOLERANCE = Decimal(config("CAISSE_ECART_TOLERANCE", default="500.00"))
 
 # ──────────────────────────────────────────────────────────────────────────
 # Logging

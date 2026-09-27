@@ -1,0 +1,88 @@
+{% extends "webui/base.html" %}
+{% load i18n l10n %}
+
+{% block title %}{% trans "Ventes POS" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Ventes POS" %}</h1>
+    <p class="page-sub">
+      {% if user.is_comptable_or_higher %}{% trans "Toutes les ventes du point de vente." %}{% else %}{% trans "Vos ventes au comptoir." %}{% endif %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="{% url 'caisse_pos' %}">{% trans "Terminal" %}</a>
+  </div>
+</div>
+
+<section class="card">
+  <form method="get" class="filter-bar">
+    <input type="search" name="q" class="input" value="{{ q }}" placeholder="{% trans 'Référence (VTE-…)' %}">
+    <select name="statut" class="input">
+      <option value="">{% trans "Tous statuts" %}</option>
+      <option value="VALIDEE" {% if statut == 'VALIDEE' %}selected{% endif %}>{% trans "Validée" %}</option>
+      <option value="ANNULEE" {% if statut == 'ANNULEE' %}selected{% endif %}>{% trans "Annulée" %}</option>
+    </select>
+    <button type="submit" class="btn btn-ghost">{% trans "Filtrer" %}</button>
+  </form>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{% trans "Référence" %}</th>
+        {% if user.is_comptable_or_higher %}<th>{% trans "Vendeur" %}</th>{% endif %}
+        <th>{% trans "Date" %}</th>
+        <th>{% trans "Client" %}</th>
+        <th class="num">{% trans "Total TTC" %}</th>
+        <th>{% trans "Moyens" %}</th>
+        <th>{% trans "Statut" %}</th>
+        <th>{% trans "Ticket" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in ventes %}
+      <tr class="{% if v.statut == 'ANNULEE' %}row-muted{% endif %}">
+        <td><strong>{{ v.reference }}</strong></td>
+        {% if user.is_comptable_or_higher %}<td>{{ v.vendeur.display_name }}</td>{% endif %}
+        <td>{{ v.created_at|date:"d/m/Y H:i" }}</td>
+        <td>{{ v.client_name|default:"—" }}</td>
+        <td class="num tnum">{{ v.total_ttc|floatformat:0|unlocalize }}</td>
+        <td>
+          {% for p in v.paiements.all %}<span class="badge">{{ p.get_moyen_display|truncatechars:18 }}</span>{% endfor %}
+        </td>
+        <td>
+          {% if v.statut == 'VALIDEE' %}<span class="badge badge-success">{{ v.get_statut_display }}</span>
+          {% else %}<span class="badge badge-danger">{{ v.get_statut_display }}</span>{% endif %}
+        </td>
+        <td class="table-actions">
+          <a class="btn btn-ghost btn-sm" href="{% url 'caisse_ticket_pdf' v.reference %}" target="_blank" title="PDF">PDF</a>
+          <a class="btn btn-ghost btn-sm" href="{% url 'caisse_ticket_txt' v.reference %}" target="_blank" title="{% trans 'Aperçu texte' %}">{% trans "Aperçu" %}</a>
+          {% if user.is_comptable_or_higher and v.statut == 'VALIDEE' %}
+          <form method="post" action="{% url 'caisse_vente_annuler' v.reference %}" class="inline-form"
+                data-loading-text="Annulation…">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost btn-sm btn-danger-ghost" title="{% trans 'Annuler la vente' %}">{% trans "Annuler" %}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="muted">{% trans "Aucune vente enregistrée." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if is_paginated %}
+  <nav class="pagination">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-ghost btn-sm" href="?q={{ q }}&statut={{ statut }}&page={{ page_obj.previous_page_number }}">{% trans "Précédent" %}</a>
+    {% endif %}
+    <span class="muted">{% trans "Page" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-ghost btn-sm" href="?q={{ q }}&statut={{ statut }}&page={{ page_obj.next_page_number }}">{% trans "Suivant" %}</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}

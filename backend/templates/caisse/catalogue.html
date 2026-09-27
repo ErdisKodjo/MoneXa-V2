@@ -1,0 +1,136 @@
+{% extends "webui/base.html" %}
+{% load i18n l10n %}
+
+{% block title %}{% trans "Catalogue produits" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Catalogue produits (POS)" %}</h1>
+    <p class="page-sub">{% trans "Référentiel articles, prix TTC, TVA 18 %, stock et seuils d'alerte (POS-01)." %}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="{% url 'caisse_catalogue_export' %}">CSV ↓</a>
+    <a class="btn btn-ghost" href="{% url 'caisse_pos' %}">{% trans "Terminal" %}</a>
+  </div>
+</div>
+
+<div class="two-col">
+  <section class="card">
+    <h2 class="card-title">{% if form_edit %}{% trans "Modifier l'article" %}{% else %}{% trans "Nouvel article" %}{% endif %}</h2>
+    {% if form_edit %}
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="pk" value="{{ edit_pk }}">
+      {% for field in form_edit %}
+      <div class="form-row">
+        {{ field.label_tag }} {{ field }} {{ field.errors }}
+      </div>
+      {% endfor %}
+      <div class="btn-row">
+        <button type="submit" class="btn btn-primary">{% trans "Enregistrer" %}</button>
+        <a class="btn btn-ghost" href="{% url 'caisse_catalogue' %}">{% trans "Annuler" %}</a>
+      </div>
+    </form>
+    {% else %}
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {% for field in form %}
+      <div class="form-row">
+        {{ field.label_tag }} {{ field }} {{ field.errors }}
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary">{% trans "Créer l'article" %}</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <h2 class="card-title">{% trans "Nouvelle catégorie" %}</h2>
+      <form method="post" class="inline-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="categorie">
+        {{ form_categorie.nom }} {{ form_categorie.couleur }}
+        <button type="submit" class="btn btn-ghost">{% trans "Créer" %}</button>
+      </form>
+      {% if all_categories %}
+      <p class="chip-cloud">
+        {% for c in all_categories %}<span class="chip" style="--chip: {{ c.couleur }}">{{ c.nom }}</span>{% endfor %}
+      </p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">{% trans "Import CSV du référentiel" %}</h2>
+      <p class="muted">
+        {% trans "Colonnes attendues (séparateur ; ou ,) : reference;ean;designation;categorie;unite;prix_ttc;tva_taux;cout_achat;stock;seuil_alerte;actif. Référence existante = mise à jour." %}
+      </p>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="file" name="fichier" accept=".csv,text/csv" class="input" required>
+        <button type="submit" class="btn btn-primary">{% trans "Importer" %}</button>
+      </form>
+    </section>
+  </div>
+</div>
+
+<section class="card">
+  <form method="get" class="filter-bar">
+    <input type="search" name="q" class="input" value="{{ q }}" placeholder="{% trans 'Désignation, référence ou EAN…' %}">
+    <button type="submit" class="btn btn-ghost">{% trans "Rechercher" %}</button>
+  </form>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{% trans "Référence" %}</th>
+        <th>{% trans "Désignation" %}</th>
+        <th>{% trans "Catégorie" %}</th>
+        <th>{% trans "EAN" %}</th>
+        <th class="num">{% trans "Prix TTC" %}</th>
+        <th class="num">{% trans "TVA %" %}</th>
+        <th class="num">{% trans "Stock" %}</th>
+        <th class="num">{% trans "Seuil" %}</th>
+        <th>{% trans "État" %}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in produits %}
+      <tr>
+        <td><strong>{{ p.reference }}</strong></td>
+        <td>{{ p.designation }}</td>
+        <td>{% if p.categorie %}<span class="chip" style="--chip: {{ p.categorie.couleur }}">{{ p.categorie.nom }}</span>{% else %}—{% endif %}</td>
+        <td class="tnum">{{ p.ean|default:"—" }}</td>
+        <td class="num tnum">{{ p.prix_ttc|floatformat:0|unlocalize }}</td>
+        <td class="num tnum">{{ p.tva_taux|unlocalize }}</td>
+        <td class="num tnum {% if p.stock_bas %}text-danger{% endif %}">{{ p.stock|floatformat:0|unlocalize }}</td>
+        <td class="num tnum">{{ p.seuil_alerte|floatformat:0|unlocalize }}</td>
+        <td>
+          {% if p.actif %}<span class="badge badge-success">{% trans "Actif" %}</span>
+          {% else %}<span class="badge">{% trans "Inactif" %}</span>{% endif %}
+        </td>
+        <td class="table-actions">
+          <a class="btn btn-ghost btn-sm" href="?q={{ q }}&edit={{ p.pk }}">{% trans "Éditer" %}</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="10" class="muted">{% trans "Aucun article — créez le premier ou importez un CSV." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if is_paginated %}
+  <nav class="pagination">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-ghost btn-sm" href="?q={{ q }}&page={{ page_obj.previous_page_number }}">{% trans "Précédent" %}</a>
+    {% endif %}
+    <span class="muted">{% trans "Page" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-ghost btn-sm" href="?q={{ q }}&page={{ page_obj.next_page_number }}">{% trans "Suivant" %}</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}

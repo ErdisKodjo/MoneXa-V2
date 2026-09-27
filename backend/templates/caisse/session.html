@@ -1,0 +1,166 @@
+{% extends "webui/base.html" %}
+{% load i18n l10n %}
+
+{% block title %}{% trans "Session de caisse" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Session de caisse" %}</h1>
+    <p class="page-sub">{% trans "Fond de caisse, mouvements d'espèces, rapport X et clôture Z (POS-06 / POS-07)." %}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="{% url 'caisse_pos' %}">{% trans "Retour au terminal" %}</a>
+  </div>
+</div>
+
+{% if session %}
+<div class="two-col">
+  <section class="card">
+    <div class="card-head-row">
+      <h2 class="card-title">{% trans "Session ouverte" %} #{{ session.pk }}</h2>
+      <span class="badge badge-info">{{ session.get_statut_display }}</span>
+    </div>
+    <p class="muted">{{ session.ouverte_at|date:"d/m/Y H:i" }} · {% trans "Fond de caisse" %} : <strong class="tnum">{{ session.fond_caisse|floatformat:2|unlocalize }}</strong> FCFA</p>
+
+    {% if rapport %}
+    <h3 class="section-sub">{% trans "Rapport X (intermédiaire)" %}</h3>
+    <div class="kpi-grid kpi-4">
+      <div class="kpi">
+        <p class="kpi-label">{% trans "Tickets" %}</p>
+        <p class="kpi-value" data-count="{{ rapport.nb_tickets|unlocalize }}">0</p>
+      </div>
+      <div class="kpi">
+        <p class="kpi-label">{% trans "Total TTC" %}</p>
+        <p class="kpi-value" data-count="{{ rapport.total_ttc|unlocalize }}">0</p>
+        <span class="kpi-sub">FCFA</span>
+      </div>
+      <div class="kpi">
+        <p class="kpi-label">{% trans "Panier moyen" %}</p>
+        <p class="kpi-value" data-count="{{ rapport.panier_moyen|unlocalize }}">0</p>
+        <span class="kpi-sub">FCFA</span>
+      </div>
+      <div class="kpi">
+        <p class="kpi-label">{% trans "Espèces théoriques" %}</p>
+        <p class="kpi-value" data-count="{{ rapport.especes_theorique|unlocalize }}">0</p>
+        <span class="kpi-sub">FCFA</span>
+      </div>
+    </div>
+
+    <table class="table">
+      <thead><tr><th>{% trans "Moyen de paiement" %}</th><th class="num">{% trans "Montant" %}</th><th class="num">{% trans "Tx" %}</th></tr></thead>
+      <tbody>
+        {% for moyen, info in rapport.par_moyen.items %}
+        <tr>
+          <td>{{ info.label }}</td>
+          <td class="num tnum">{{ info.montant|floatformat:0|unlocalize }}</td>
+          <td class="num tnum">{{ info.nb|unlocalize }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="muted">{% trans "Aucune vente dans cette session." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if rapport.mouvements %}
+    <h3 class="section-sub">{% trans "Mouvements d'espèces" %}</h3>
+    <table class="table">
+      <thead><tr><th>{% trans "Type" %}</th><th class="num">{% trans "Montant" %}</th><th>{% trans "Note" %}</th><th>{% trans "Heure" %}</th></tr></thead>
+      <tbody>
+        {% for m in rapport.mouvements %}
+        <tr>
+          <td>{{ m.get_type_display }}</td>
+          <td class="num tnum {% if m.montant < 0 %}text-danger{% else %}text-success{% endif %}">{{ m.montant|floatformat:2|unlocalize }}</td>
+          <td>{{ m.note|default:"—" }}</td>
+          <td>{{ m.created_at|date:"H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <h2 class="card-title">{% trans "Mouvement d'espèces" %}</h2>
+      <form method="post" action="{% url 'caisse_session' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="mouvement">
+        <div class="form-row">
+          {{ form_mouvement.type.label_tag }} {{ form_mouvement.type }}
+        </div>
+        <div class="form-row">
+          {{ form_mouvement.montant.label_tag }} {{ form_mouvement.montant }}
+        </div>
+        <div class="form-row">
+          {{ form_mouvement.note.label_tag }} {{ form_mouvement.note }}
+        </div>
+        <button type="submit" class="btn btn-ghost">{% trans "Enregistrer le mouvement" %}</button>
+      </form>
+    </section>
+
+    <section class="card card-danger-soft">
+      <h2 class="card-title">{% trans "Clôture Z (définitive)" %}</h2>
+      <p class="muted">{% trans "Comptez les espèces physiques. Tout écart au-delà de la tolérance est signalé au gérant comme anomalie." %}</p>
+      <form method="post" action="{% url 'caisse_session' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="cloturer">
+        <div class="form-row">
+          {{ form_cloture.comptage_physique.label_tag }} {{ form_cloture.comptage_physique }}
+        </div>
+        <div class="form-row">
+          {{ form_cloture.note.label_tag }} {{ form_cloture.note }}
+        </div>
+        <button type="submit" class="btn btn-danger">{% trans "Clôturer la session" %}</button>
+      </form>
+    </section>
+  </div>
+</div>
+
+{% else %}
+<section class="card">
+  <h2 class="card-title">{% trans "Ouvrir une session" %}</h2>
+  <p class="muted">{% trans "Une session ouverte par vendeur. Déclarez le fond de caisse initial." %}</p>
+  <form method="post" action="{% url 'caisse_session' %}" class="inline-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="ouvrir">
+    {{ form_ouvrir.fond_caisse }}
+    <button type="submit" class="btn btn-primary">{% trans "Ouvrir" %}</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2 class="card-title">{% trans "Historique des sessions" %}</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        {% if user.is_comptable_or_higher %}<th>{% trans "Vendeur" %}</th>{% endif %}
+        <th>#</th><th>{% trans "Ouverte" %}</th><th>{% trans "Fermée" %}</th>
+        <th>{% trans "Statut" %}</th><th>{% trans "Fond" %}</th><th>{% trans "Écart" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        {% if user.is_comptable_or_higher %}<td>{{ s.vendeur.display_name }}</td>{% endif %}
+        <td>{{ s.pk }}</td>
+        <td>{{ s.ouverte_at|date:"d/m H:i" }}</td>
+        <td>{{ s.fermee_at|date:"d/m H:i"|default:"—" }}</td>
+        <td>
+          {% if s.statut == 'OUVERTE' %}<span class="badge badge-info">{{ s.get_statut_display }}</span>
+          {% else %}<span class="badge">{{ s.get_statut_display }}</span>{% endif %}
+        </td>
+        <td class="tnum">{{ s.fond_caisse|floatformat:0|unlocalize }}</td>
+        <td class="tnum {% if s.ecart and s.ecart != 0 %}text-danger{% endif %}">
+          {{ s.ecart|floatformat:2|unlocalize|default:"—" }}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="muted">{% trans "Aucune session." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

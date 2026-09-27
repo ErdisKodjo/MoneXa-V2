@@ -17,6 +17,7 @@ Usage:
     python manage.py seed_demo
 """
 import random
+import uuid
 from datetime import timedelta, timezone
 from decimal import Decimal
 
@@ -75,6 +76,12 @@ class Command(BaseCommand):
             Expense.objects.all().delete()
             Account.objects.all().delete()
             ForecastCache.objects.all().delete()
+            # Caisse (POS)
+            from caisse.models import Produit as P, Vente as V, SessionCaisse as S, Categorie as C
+            P.objects.all().delete()
+            V.objects.all().delete()
+            S.objects.all().delete()
+            C.objects.all().delete()
             User.objects.exclude(is_superuser=True).delete()
 
         already_seeded = User.objects.filter(email="gerant@monexa.tg").exists() and Invoice.objects.exists()
@@ -225,6 +232,62 @@ class Command(BaseCommand):
             self.stdout.write(f"  ✓ Cache prévisions Holt-Winters (J+7 et J+30)")
         except Exception as e:
             self.stdout.write(self.style.WARNING(f"  ⚠ Prévisions non générées: {e}"))
+
+        # ── Système de caisse (POS) — catalogue + session démo (§5) ─
+        from caisse.models import Produit as PosProduit, SessionCaisse as _PosSession
+        if not PosProduit.objects.exists():
+            from caisse.models import Categorie
+            from caisse import services as pos
+            from decimal import Decimal as D
+
+            aliments, _ = Categorie.objects.get_or_create(nom="Épicerie", defaults={"couleur": "#063082"})
+            boissons, _ = Categorie.objects.get_or_create(nom="Boissons", defaults={"couleur": "#F59E0B"})
+            quinc, _ = Categorie.objects.get_or_create(nom="Quincaillerie", defaults={"couleur": "#059669"})
+
+            POS_ARTICLES = [
+                ("ART-000001", "Riz parfumé 25 kg", aliments, D("25000"), D("18.00"), D("40"), D("10")),
+                ("ART-000002", "Huile végétale 5 L", aliments, D("5000"), D("18.00"), D("35"), D("12")),
+                ("ART-000003", "Sucre en poudre 1 kg", aliments, D("900"), D("18.00"), D("120"), D("25")),
+                ("ART-000004", "Eau minérale 1,5 L", boissons, D("300"), D("18.00"), D("300"), D("60")),
+                ("ART-000005", "Soda cola 33 cl", boissons, D("400"), D("18.00"), D("240"), D("48")),
+                ("ART-000006", "Ciment CIMAF 50 kg", quinc, D("5500"), D("18.00"), D("80"), D("15")),
+                ("ART-000007", "Peinture satinée 20 L", quinc, D("25000"), D("18.00"), D("20"), D("5")),
+                ("ART-000008", "Câble électrique 100 m", quinc, D("18000"), D("18.00"), D("4"), D("5")),
+            ]
+            for ref, nom, cat, prix, tva, stock, seuil in POS_ARTICLES:
+                PosProduit.objects.get_or_create(
+                    reference=ref,
+                    defaults={
+                        "designation": nom, "categorie": cat, "prix_ttc": prix,
+                        "tva_taux": tva, "stock": stock, "seuil_alerte": seuil,
+                        "ean": f"380{abs(hash(ref)) % 10**10:010d}",
+                    },
+                )
+            self.stdout.write(f"  ✓ Catalogue POS : {PosProduit.objects.count()} articles (3 catégories)")
+
+            # Session de caisse du jour pour le caissier + 3 ventes démo idempotentes
+            if not _PosSession.objects.filter(vendeur=caissier, statut="OUVERTE").exists():
+                sess = pos.ouvrir_session(caissier, D("10000"))
+                riz = PosProduit.objects.get(reference="ART-000001")
+                eau = PosProduit.objects.get(reference="ART-000004")
+                ciment = PosProduit.objects.get(reference="ART-000006")
+                ventes_demo = [
+                    (str(uuid.uuid5(uuid.NAMESPACE_URL, "monexa-seed-vente-1")),
+                     [(riz.pk, D("1"), D("25000"))], [("ESPECES", D("25000"))]),
+                    (str(uuid.uuid5(uuid.NAMESPACE_URL, "monexa-seed-vente-2")),
+                     [(eau.pk, D("6"), D("300"))], [("ESPECES", D("2500"))]),
+                    (str(uuid.uuid5(uuid.NAMESPACE_URL, "monexa-seed-vente-3")),
+                     [(ciment.pk, D("3"), D("5500"))], [("ESPECES", D("9000")), ("TMONEY", D("7500"))]),
+                ]
+                for key, lignes, paiements in ventes_demo:
+                    pos.enregistrer_vente(pos.VenteInput(
+                        session_id=sess.pk, vendeur_id=caissier.pk,
+                        lignes=[pos.LigneInput(produit_id=pid, designation="", quantite=q,
+                                               prix_unitaire_ttc=p) for pid, q, p in lignes],
+                        paiements=[pos.PaiementInput(moyen=m, montant=mt) for m, mt in paiements],
+                        idempotence_key=key,
+                    ))
+                self.stdout.write("  ✓ Session de caisse démo ouverte (3 ventes, dont mixte espèces+T-Money)")
 
         self.stdout.write(self.style.SUCCESS("\n✅ Seed démo terminé."))
         self.stdout.write("\nComptes de test :")

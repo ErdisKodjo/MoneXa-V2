@@ -1,0 +1,345 @@
+{% extends "webui/base.html" %}
+{% load i18n l10n static %}
+
+{% block title %}{% trans "Caisse" %}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% trans "Terminal de caisse" %}</h1>
+    <p class="page-sub">
+      {% if session %}
+      {% trans "Session" %} #{{ session.pk }} · {% trans "ouverte" %} {{ session.ouverte_at|date:"H:i" }} ·
+      {% trans "fond" %} {{ session.fond_caisse|floatformat:0|unlocalize }} FCFA
+      {% else %}
+      {% trans "Aucune session ouverte — ouvrez la caisse pour encaisser." %}
+      {% endif %}
+    </p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="{% url 'caisse_session' %}">{% trans "Ma session (X / Z)" %}</a>
+    <a class="btn btn-ghost" href="{% url 'caisse_ventes' %}">{% trans "Ventes" %}</a>
+  </div>
+</div>
+
+{% if session and rapport %}
+<div class="kpi-grid kpi-4">
+  <div class="card kpi">
+    <p class="kpi-label">{% trans "Tickets de la session" %}</p>
+    <p class="kpi-value" data-count="{{ rapport.nb_tickets|unlocalize }}">0</p>
+  </div>
+  <div class="card kpi">
+    <p class="kpi-label">{% trans "Total encaissé" %}</p>
+    <p class="kpi-value" data-count="{{ rapport.total_ttc|unlocalize }}">0</p>
+    <span class="kpi-sub">FCFA</span>
+  </div>
+  <div class="card kpi">
+    <p class="kpi-label">{% trans "Panier moyen" %}</p>
+    <p class="kpi-value" data-count="{{ rapport.panier_moyen|unlocalize }}">0</p>
+    <span class="kpi-sub">FCFA</span>
+  </div>
+  <div class="card kpi">
+    <p class="kpi-label">{% trans "Espèces théoriques" %}</p>
+    <p class="kpi-value" data-count="{{ rapport.especes_theorique|unlocalize }}">0</p>
+    <span class="kpi-sub">FCFA</span>
+  </div>
+</div>
+{% endif %}
+
+{% if session %}
+<div class="pos-layout">
+
+  {% if derniere_vente %}
+  <div class="card pos-confirmation">
+    <div class="pos-confirm-head">
+      <span class="badge badge-success">{% trans "Encaissée" %}</span>
+      <strong>{{ derniere_vente.reference }}</strong>
+      <span class="pos-confirm-amount">{{ derniere_vente.total_ttc|floatformat:0|unlocalize }} FCFA</span>
+    </div>
+    <div class="pos-confirm-actions">
+      <a class="btn btn-ghost btn-sm" href="{% url 'caisse_ticket_pdf' derniere_vente.reference %}" target="_blank">Ticket PDF</a>
+      <a class="btn btn-ghost btn-sm" href="{% url 'caisse_ticket_txt' derniere_vente.reference %}" target="_blank">{% trans "Aperçu" %}</a>
+      <a class="btn btn-ghost btn-sm" href="{% url 'caisse_ticket_escpos' derniere_vente.reference %}">ESC/POS</a>
+    </div>
+  </div>
+  {% endif %}
+
+  <section class="card pos-catalogue">
+    <div class="pos-toolbar">
+      <input type="search" id="posSearch" class="input pos-search" placeholder="{% trans 'Rechercher (désignation, EAN) — scan direct accepté' %}" autocomplete="off">
+    </div>
+    <div class="pos-chips" id="posChips">
+      <button type="button" class="chip is-active" data-cat="">{% trans "Tous" %}</button>
+      {% for c in categories %}
+      <button type="button" class="chip" data-cat="{{ c.pk }}" style="--chip: {{ c.couleur }}">{{ c.nom }}</button>
+      {% endfor %}
+    </div>
+    <div class="pos-grid" id="posGrid">
+      {% for p in produits %}
+      <button type="button" class="pos-item {% if not p.actif %}is-disabled{% endif %}"
+              data-id="{{ p.pk }}" data-name="{{ p.designation }}" data-price="{{ p.prix_ttc|unlocalize }}"
+              data-tva="{{ p.tva_taux|unlocalize }}" data-ean="{{ p.ean }}"
+              data-cat="{% if p.categorie %}{{ p.categorie.pk }}{% endif %}"
+              data-stock="{{ p.stock|unlocalize }}" data-unite="{{ p.unite }}">
+        <span class="pos-item-name">{{ p.designation|truncatechars:26 }}</span>
+        <span class="pos-item-price">{{ p.prix_ttc|floatformat:0|unlocalize }} F</span>
+        {% if p.stock_bas %}<span class="badge badge-danger pos-item-flag">{% trans "Stock bas" %}</span>{% endif %}
+      </button>
+      {% empty %}
+      <p class="empty-state">{% trans "Catalogue vide — créez vos articles ou importez un CSV depuis le Catalogue." %}</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <aside class="card pos-cart">
+    <h2 class="card-title">{% trans "Panier" %}</h2>
+    <form method="post" action="{% url 'caisse_pos' %}" id="posForm" data-loading-text="Encaissement…">
+      {% csrf_token %}
+      <input type="hidden" name="cart" id="cartInput" value="{}">
+      <div class="pos-cart-lines" id="cartLines">
+        <p class="pos-cart-empty">{% trans "Touchez un article pour l'ajouter." %}</p>
+      </div>
+
+      <div class="pos-cart-totals">
+        <div class="pos-total-row"><span>{% trans "Sous-total" %}</span><strong id="posSubtotal" class="tnum">0</strong></div>
+        <div class="pos-total-row">
+          <label for="posRemise">{% trans "Remise panier (%)" %} <small class="muted">max {{ plafond_remise|unlocalize }}</small></label>
+          <input type="number" id="posRemise" class="input pos-mini" min="0" step="0.5" value="0" inputmode="decimal">
+        </div>
+        <div class="pos-total-row pos-total-main"><span>{% trans "TOTAL TTC" %}</span><strong id="posTotal" class="tnum">0</strong></div>
+      </div>
+
+      <div class="pos-pay" id="posPay">
+        <p class="pos-pay-title">{% trans "Encaissement (multi-moyens)" %}</p>
+        {% for m in moyens %}
+        <div class="pos-pay-row" data-moyen="{{ m.0 }}">
+          <span class="pos-pay-label">{{ m.1 }}</span>
+          <input type="number" class="input pos-mini" data-pay="{{ m.0 }}" min="0" step="0.01" placeholder="0" inputmode="decimal">
+        </div>
+        {% endfor %}
+        <div class="pos-total-row pos-rendu"><span>{% trans "Monnaie à rendre" %}</span><strong id="posRendu" class="tnum">0</strong></div>
+        <div class="pos-pay-row">
+          <input type="text" id="posClient" class="input" placeholder="{% trans 'Client (facultatif)' %}">
+          <input type="tel" id="posPhone" class="input" placeholder="{% trans 'Téléphone' %}">
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-lg pos-checkout" {% if not session %}disabled{% endif %}>
+        {% trans "Encaisser" %}
+      </button>
+    </form>
+
+    <form method="post" action="{% url 'caisse_pos' %}" class="pos-quick" id="quickForm">
+      {% csrf_token %}
+      <p class="pos-pay-title">{% trans "Vente rapide (montant libre, service)" %}</p>
+      <div class="pos-quick-row">
+        <input type="number" name="quick_amount" class="input" min="1" step="1" placeholder="Montant FCFA" inputmode="numeric" required>
+        <button type="submit" class="btn btn-ghost">+ {% trans "Espèces" %}</button>
+      </div>
+      <input type="hidden" name="quick" value="1">
+    </form>
+  </aside>
+</div>
+
+<script>
+/* Terminal POS — panier en mémoire, rendu calculé, POST JSON (zéro dépendance) */
+(function () {
+  'use strict';
+  var cart = [];
+  var crypto = window.crypto || window.msCrypto;
+  var lines = document.getElementById('cartLines');
+  if (!lines) return;
+
+  function fnum(v) { return String(Math.round(v)); }
+  function money(el, v) { el.textContent = fnum(v) + ' F'; }
+
+  function makeKey() {
+    /* UUID v4 — le champ idempotence_key est un UUIDField (replay offline) */
+    if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    var b = crypto ? crypto.getRandomValues(new Uint8Array(16))
+                   : Array.from({length: 16}, function () { return Math.floor(Math.random() * 256); });
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    var h = Array.from(b, function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+  }
+
+  function addItem(btn) {
+    var id = btn.getAttribute('data-id');
+    var existing = cart.find(function (l) { return l.produit_id === id && !l.remise_pct; });
+    if (existing) { existing.quantite += 1; }
+    else {
+      cart.push({
+        produit_id: id,
+        designation: btn.getAttribute('data-name'),
+        quantite: 1,
+        prix_unitaire_ttc: parseFloat(btn.getAttribute('data-price')) || 0,
+        tva_taux: parseFloat(btn.getAttribute('data-tva')) || 18,
+        remise_pct: 0
+      });
+    }
+    render();
+  }
+
+  function render() {
+    lines.innerHTML = '';
+    if (!cart.length) {
+      lines.innerHTML = '<p class="pos-cart-empty">{% trans "Ajoutez des articles au panier." %}</p>';
+    } else {
+      cart.forEach(function (l, i) {
+        var row = document.createElement('div');
+        row.className = 'pos-line';
+        var name = document.createElement('span');
+        name.className = 'pos-line-name';
+        name.textContent = l.designation;
+        var qty = document.createElement('div');
+        qty.className = 'pos-line-qty';
+        var minus = document.createElement('button');
+        minus.type = 'button'; minus.textContent = '\u2212'; minus.setAttribute('aria-label', 'Moins');
+        var n = document.createElement('span'); n.textContent = l.quantite;
+        var plus = document.createElement('button');
+        plus.type = 'button'; plus.textContent = '+'; plus.setAttribute('aria-label', 'Plus');
+        minus.addEventListener('click', function () { l.quantite = Math.max(1, l.quantite - 1); render(); });
+        plus.addEventListener('click', function () { l.quantite += 1; render(); });
+        qty.appendChild(minus); qty.appendChild(n); qty.appendChild(plus);
+        var disc = document.createElement('button');
+        disc.type = 'button'; disc.className = 'pos-line-disc'; disc.textContent = '%' + (l.remise_pct || 0);
+        disc.setAttribute('aria-label', 'Remise ligne');
+        disc.addEventListener('click', function () {
+          var v = window.prompt('Remise ligne (%), 0 pour retirer :', l.remise_pct || 0);
+          if (v === null) return;
+          l.remise_pct = Math.max(0, Math.min(100, parseFloat(v.replace(',', '.')) || 0));
+          render();
+        });
+        var del = document.createElement('button');
+        del.type = 'button'; del.className = 'pos-line-del'; del.textContent = '\u00d7'; del.setAttribute('aria-label', 'Retirer');
+        del.addEventListener('click', function () { cart.splice(i, 1); render(); });
+        row.appendChild(name); row.appendChild(qty);
+        var tot = document.createElement('span');
+        tot.className = 'pos-line-total tnum';
+        tot.textContent = fnum(l.quantite * l.prix_unitaire_ttc * (1 - l.remise_pct / 100)) + ' F';
+        row.appendChild(tot); row.appendChild(disc); row.appendChild(del);
+        lines.appendChild(row);
+      });
+    }
+    updateTotals();
+  }
+
+  function remisePct() {
+    return Math.max(0, parseFloat(document.getElementById('posRemise').value) || 0);
+  }
+  function subtotal() {
+    return cart.reduce(function (s, l) {
+      return s + l.quantite * l.prix_unitaire_ttc * (1 - (l.remise_pct || 0) / 100);
+    }, 0);
+  }
+  function updateTotals() {
+    var rem = remisePct();
+    var total = subtotal() * (1 - rem / 100);
+    money(document.getElementById('posSubtotal'), subtotal());
+    money(document.getElementById('posTotal'), total);
+    var pay = 0, cash = 0;
+    document.querySelectorAll('[data-pay]').forEach(function (inp) {
+      var v = parseFloat(inp.value) || 0;
+      pay += v;
+      if (inp.getAttribute('data-pay') === 'ESPECES') cash = v;
+    });
+    var rendu = Math.max(0, pay - total);
+    if (pay > 0 && cash === 0) rendu = 0; /* rendu uniquement en espèces */
+    money(document.getElementById('posRendu'), rendu);
+  }
+
+  document.querySelectorAll('.pos-item').forEach(function (b) {
+    b.addEventListener('click', function () { addItem(b); });
+  });
+
+  /* Recherche instantanée + filtrage catégorie + scan EAN (Enter ou préfixe) */
+  var search = document.getElementById('posSearch');
+  var activeCat = '';
+  document.querySelectorAll('#posChips .chip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      document.querySelectorAll('#posChips .chip').forEach(function (x) { x.classList.remove('is-active'); });
+      c.classList.add('is-active');
+      activeCat = c.getAttribute('data-cat');
+      filter();
+    });
+  });
+  function filter() {
+    var q = (search.value || '').trim().toLowerCase();
+    document.querySelectorAll('.pos-item').forEach(function (b) {
+      var match = (!q || b.getAttribute('data-name').toLowerCase().indexOf(q) >= 0 || b.getAttribute('data-ean').indexOf(q) >= 0);
+      var catOk = !activeCat || b.getAttribute('data-cat') === activeCat;
+      b.style.display = (match && catOk) ? '' : 'none';
+    });
+  }
+  search.addEventListener('input', filter);
+  search.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var q = search.value.trim();
+    var exact = Array.from(document.querySelectorAll('.pos-item')).find(function (b) {
+      return b.getAttribute('data-ean') && b.getAttribute('data-ean') === q;
+    });
+    if (!exact) {
+      exact = Array.from(document.querySelectorAll('.pos-item')).find(function (b) {
+        return b.style.display !== 'none';
+      });
+    }
+    if (exact) { addItem(exact); search.value = ''; filter(); search.focus(); }
+  });
+
+  document.getElementById('posRemise').addEventListener('input', updateTotals);
+  document.querySelectorAll('[data-pay]').forEach(function (inp) {
+    inp.addEventListener('input', updateTotals);
+  });
+
+  document.getElementById('posForm').addEventListener('submit', function (e) {
+    if (!cart.length) {
+      e.preventDefault();
+      return;
+    }
+    var paiements = [];
+    document.querySelectorAll('[data-pay]').forEach(function (inp) {
+      var v = parseFloat(inp.value) || 0;
+      if (v > 0) paiements.push({ moyen: inp.getAttribute('data-pay'), montant: v, reference: '' });
+    });
+    if (!paiements.length) paiements.push({ moyen: 'ESPECES', montant: subtotal() * (1 - remisePct() / 100), reference: '' });
+    var payload = {
+      idempotence_key: makeKey(),
+      client_name: document.getElementById('posClient').value,
+      client_phone: document.getElementById('posPhone').value,
+      remise_panier: remisePct(),
+      lignes: cart,
+      paiements: paiements
+    };
+    document.getElementById('cartInput').value = JSON.stringify(payload);
+  });
+
+  /* Vente rapide : panier à une ligne libre, payée en espèces */
+  document.getElementById('quickForm').addEventListener('submit', function () {
+    var amount = parseFloat(this.querySelector('[name=quick_amount]').value) || 0;
+    if (amount <= 0) { return false; }
+    document.getElementById('cartInput').value = JSON.stringify({
+      idempotence_key: makeKey(),
+      remise_panier: 0, client_name: '', client_phone: '',
+      lignes: [{ produit_id: null, designation: 'Vente rapide', quantite: 1, prix_unitaire_ttc: amount, tva_taux: 18, remise_pct: 0 }],
+      paiements: [{ moyen: 'ESPECES', montant: amount, reference: '' }]
+    });
+  });
+})();
+</script>
+{% else %}
+
+<div class="card pos-nosession">
+  <h2 class="card-title">{% trans "Ouvrir la caisse" %}</h2>
+  <p class="muted">{% trans "Déclarez votre fond de caisse pour commencer la journée (POS-06)." %}</p>
+  <form method="post" action="{% url 'caisse_session' %}" class="pos-open-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="ouvrir">
+    <label class="visually-hidden" for="fond">{% trans "Fond de caisse" %}</label>
+    <input type="number" id="fond" name="fond_caisse" class="input" min="0" step="0.01" value="0" inputmode="decimal">
+    <button type="submit" class="btn btn-primary btn-lg">{% trans "Ouvrir la session" %}</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

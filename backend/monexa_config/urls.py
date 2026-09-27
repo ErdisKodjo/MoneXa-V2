@@ -54,6 +54,9 @@ urlpatterns = [
     # ── Couche MVT web (sessions, templates, forms) ────────────────────
     path("", include("webui.urls")),
 
+    # ── Système de caisse (POS) — /caisse/… ────────────────────────────
+    path("", include("caisse.urls")),
+
     # i18n — changement de langue (FR / Ewé / Kabyé)
     path("i18n/", include("django.conf.urls.i18n")),
 

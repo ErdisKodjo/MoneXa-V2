@@ -136,6 +136,7 @@ MoneXa-V2/
 - 🔔 **Notifications in-app (V2.1)** — Rappels de factures échues et file de validation, commande `send_reminders` cron-able.
 - 📱 **Mobile Offline-First & trilingue** — Cache Hive, sync différée, interface **Français / Ewé / Kabyé**. **V2.1 : file de sync offline Hive — un reçu photographié sans réseau part automatiquement au retour du réseau.**
 - 📄 **Exports SYSCOHADA, CSV & PDF (V2.1)** — Journal de caisse et bilan de trésorerie PDF présentables (charte MoneXa), CSV Excel.
+- 🖥️ **Système de caisse / POS (V2.7)** — Terminal de vente tactile au comptoir : catalogue produits (EAN-13, TVA 18 %, stock + seuils d'alerte, import/export CSV), panier multi-lignes avec remises plafonnées par rôle, **multi-paiement** espèces (rendu automatique) + Mobile Money + carte, **tickets 58/80 mm** (PDF, aperçu texte, flux **ESC/POS** binaire avec QR USSD), **sessions de caisse** (fond, dépôts/retraits, rapport X, clôture Z avec **contrôle d'écart → anomalie auto + audit**), intégration trésorerie native (chaque vente devient un mouvement du journal — zéro double saisie), décrément stock + alertes de réapprovisionnement, **idempotence UUID** pour le replay hors-ligne. Conforme aux exigences POS-01 → POS-09 (Must) du cahier des charges entreprise v3.0 §5.
 
 ---
 
@@ -175,6 +176,10 @@ Voir [`docs/architecture.md`](docs/architecture.md) pour le diagramme complet.
 | Sécurité (2FA TOTP, pipeline IA) | `/securite/` | gérant |
 | TresorIA chatbot | `/assistant/` | connecté |
 | Exports CSV + PDF | `/exports/` | comptable+ |
+| **Terminal de caisse (POS)** | `/caisse/` | caissier+ |
+| **Session de caisse (rapport X / clôture Z)** | `/caisse/session/` | caissier+ |
+| **Ventes POS + tickets** | `/caisse/ventes/` | caissier+ (scoping) |
+| **Catalogue produits + CSV** | `/caisse/catalogue/` | comptable+ |
 
 ---
 
