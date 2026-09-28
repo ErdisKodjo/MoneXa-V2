@@ -37,6 +37,22 @@ class StatusBadge extends StatelessWidget {
           color = AppColors.muted;
           label = 'Non rattaché';
           break;
+        case 'EN_ATTENTE':
+          color = AppColors.gold;
+          label = 'En attente';
+          break;
+        case 'VALIDEE':
+          color = AppColors.success;
+          label = 'Validée';
+          break;
+        case 'ANNULE':
+          color = AppColors.muted;
+          label = 'Annulée';
+          break;
+        case 'ANNULEE':
+          color = AppColors.muted;
+          label = 'Annulée';
+          break;
         default:
           color = AppColors.muted;
           label = status;

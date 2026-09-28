@@ -1,7 +1,7 @@
 name: monexa
 description: "MoneXa — CFO virtuel pour PME ouest-africaines. Application mobile Flutter offline-first pour la gestion de trésorerie Mobile Money."
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

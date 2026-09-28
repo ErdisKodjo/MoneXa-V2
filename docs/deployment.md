@@ -188,3 +188,41 @@ Si la démo live échoue :
 1. Vidéo de secours 60s
 2. Django Admin en back-office hors-ligne
 3. seed_demo Docker local sur portable
+
+## §APK — Pipeline complet avec le vrai domaine (V2.8, sans NDK strippé)
+
+Le `keepDebugSymbols (**/*.so)` de `build.gradle.kts` (ajouté pour construire SANS NDK)
+laisse `libflutter.so` non-strippé (~165 Mo). Post-traitement obligatoire :
+
+```bash
+export PATH=/chemin/flutter/bin:$PATH
+export ANDROID_HOME=/chemin/android-sdk          # NDK r28 auto-téléchargé si absent
+export JAVA_HOME=/chemin/jdk-21
+
+cd mobile_app
+flutter build apk --release --target-platform android-arm64 \
+  --dart-define=API_BASE_URL=https://backend-production-15c6.up.railway.app
+
+# 1. Strip des .so (165 Mo -> 19 Mo)
+W=/tmp/apk_work && rm -rf $W && mkdir -p $W/out && cd $W/out
+unzip -q <chemin>/app-release.apk
+$ANDROID_HOME/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip \
+  --strip-unneeded lib/arm64-v8a/libflutter.so lib/arm64-v8a/libapp.so
+
+# 2. Repack (.so STOCKÉS non compressés, obligatoire extractNativeLibs=false)
+zip -X -0 -q repack.apk lib/arm64-v8a/libflutter.so lib/arm64-v8a/libapp.so
+zip -X -9 -q -r repack.apk . -x repack.apk -x "lib/*"
+
+# 3. Alignement + signature
+$ANDROID_HOME/build-tools/36.0.0/zipalign -f -p 4 repack.apk aligned.apk
+$ANDROID_HOME/build-tools/36.0.0/apksigner sign \
+  --ks ~/.android/debug.keystore --ks-pass pass:android \
+  --key-pass pass:android --ks-key-alias androiddebugkey \
+  --out monexa-1.1.0+2-arm64-railway.apk aligned.apk
+$ANDROID_HOME/build-tools/36.0.0/apksigner verify monexa-1.1.0+2-arm64-railway.apk
+```
+
+> ⚠️ Si vous activez le NDK (ndkVersion), `keepDebugSymbols` peut être retiré et
+> le strip devient automatique — la section 1 disparaît. 16 KB page alignment
+> (Android 15+) : ajouter `-P 16384` à zipalign si vous ciblez les terminaux
+> à pages 16 Ko (Play Store l'exige, le sideload sur appareils 4 Ko fonctionne).

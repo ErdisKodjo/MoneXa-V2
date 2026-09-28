@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/utils/formatters.dart';
@@ -71,6 +72,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const Text('Solde consolidé', style: TextStyle(color: AppColors.muted)),
                       const SizedBox(height: 16),
+                      // Accès rapides — le scanner de reçu vit hors de la
+                      // barre de navigation (workflow plein écran).
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _ActionCard(
+                              label: 'Scanner un reçu',
+                              icon: Icons.document_scanner,
+                              couleur: AppColors.gold,
+                              onTap: () => context.push('/upload'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _ActionCard(
+                              label: 'Nouvelle vente',
+                              icon: Icons.point_of_sale,
+                              couleur: AppColors.primary,
+                              onTap: () => context.go('/caisse'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
@@ -136,6 +161,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ],
                   ),
+      ),
+    );
+  }
+}
+
+/// Tuile d'accès rapide du dashboard (scan reçu, vente POS…).
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({
+    required this.label,
+    required this.icon,
+    required this.couleur,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color couleur;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: couleur.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: couleur, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: AppColors.navy,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

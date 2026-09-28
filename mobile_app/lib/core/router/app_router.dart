@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/assistant/presentation/screens/assistant_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/caisse/presentation/screens/pos_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../features/invoices/presentation/screens/invoices_screen.dart';
 import '../../features/payments/presentation/screens/payments_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/upload_evidence/presentation/screens/upload_evidence_screen.dart';
@@ -28,11 +30,18 @@ GoRouter createRouter(AuthBloc authBloc) {
         path: '/login',
         builder: (context, state) => const LoginScreen(),
       ),
+      // Écran plein (workflow scanner reçu) — accessible depuis l'accueil
+      // et l'écran Paiements, hors navigation basse.
+      GoRoute(
+        path: '/upload',
+        builder: (context, state) => const UploadEvidenceScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(path: '/dashboard', builder: (context, state) => const DashboardScreen()),
-          GoRoute(path: '/upload', builder: (context, state) => const UploadEvidenceScreen()),
+          GoRoute(path: '/caisse', builder: (context, state) => const PosScreen()),
+          GoRoute(path: '/invoices', builder: (context, state) => const InvoicesScreen()),
           GoRoute(path: '/payments', builder: (context, state) => const PaymentsScreen()),
           GoRoute(path: '/assistant', builder: (context, state) => const AssistantScreen()),
           GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),

@@ -10,10 +10,11 @@ class AppShell extends StatelessWidget {
 
   int _index(BuildContext context) {
     final loc = GoRouterState.of(context).uri.path;
-    if (loc.startsWith('/upload')) return 1;
-    if (loc.startsWith('/payments')) return 2;
-    if (loc.startsWith('/assistant')) return 3;
-    if (loc.startsWith('/profile')) return 4;
+    if (loc.startsWith('/caisse')) return 1;
+    if (loc.startsWith('/invoices')) return 2;
+    if (loc.startsWith('/payments')) return 3;
+    if (loc.startsWith('/assistant')) return 4;
+    if (loc.startsWith('/profile')) return 5;
     return 0;
   }
 
@@ -29,18 +30,21 @@ class AppShell extends StatelessWidget {
             case 0:
               context.go('/dashboard');
             case 1:
-              context.go('/upload');
+              context.go('/caisse');
             case 2:
-              context.go('/payments');
+              context.go('/invoices');
             case 3:
-              context.go('/assistant');
+              context.go('/payments');
             case 4:
+              context.go('/assistant');
+            case 5:
               context.go('/profile');
           }
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Accueil'),
-          NavigationDestination(icon: Icon(Icons.document_scanner_outlined), selectedIcon: Icon(Icons.document_scanner), label: 'Reçu'),
+          NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale), label: 'Caisse'),
+          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Factures'),
           NavigationDestination(icon: Icon(Icons.payments_outlined), selectedIcon: Icon(Icons.payments), label: 'Paiements'),
           NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), selectedIcon: Icon(Icons.auto_awesome), label: 'TresorIA'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),

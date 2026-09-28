@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/utils/formatters.dart';
@@ -31,7 +32,16 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Paiements')),
+      appBar: AppBar(
+        title: const Text('Paiements'),
+        actions: [
+          IconButton(
+            tooltip: 'Scanner un reçu',
+            icon: const Icon(Icons.document_scanner_outlined),
+            onPressed: () => context.push('/upload'),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           SingleChildScrollView(

@@ -12,4 +12,13 @@ class ApiEndpoints {
   static String validatePayment(int id) => '/api/payments/$id/validate/';
   static const String assistant = '/api/assistant/ask/';
   static const String forecast = '/api/reports/forecast/';
+
+  // Factures (DRF paginé : {count, results})
+  static const String invoices = '/api/invoices/';
+
+  // Caisse POS (mobile)
+  static const String caisseProduits = '/api/caisse/produits/';
+  static const String caisseSession = '/api/caisse/session/';
+  static const String caisseCloture = '/api/caisse/session/cloture/';
+  static const String caisseVentes = '/api/caisse/ventes/';
 }

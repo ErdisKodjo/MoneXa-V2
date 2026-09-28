@@ -227,6 +227,10 @@ flutter run
 flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8000
 ```
 
+**Écrans mobiles (V2.8 — 6 onglets)** : Accueil (dashboard + accès rapides), **Caisse POS** (terminal de vente tactile : catalogue, panier, multi-moyens, rendu espèces, sessions X/Z), **Factures** (filtres par statut), Paiements (+ scanner de reçu dans l'AppBar), TresorIA (vocal), Profil. Le scanner de reçu s'ouvre aussi depuis l'accueil en plein écran.
+
+**APK arm64 release** : `mobile_app/releases/monexa-1.1.0+2-arm64-release.apk` (19 Mo, domaine Railway embarqué). Pipeline de build (sans NDK strippé automatiquement) : voir `docs/deployment.md` §APK.
+
 ---
 
 ## 👥 Comptes de test

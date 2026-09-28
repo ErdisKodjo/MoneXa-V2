@@ -36,6 +36,12 @@ from reporting.views import (
     ExportView,
 )
 from assistant.views import AskView
+from caisse.api import (
+    CaisseClotureView,
+    CaisseProduitsView,
+    CaisseSessionView,
+    CaisseVentesView,
+)
 
 router = DefaultRouter()
 router.register(r"users", UserViewSet, basename="user")
@@ -76,6 +82,12 @@ urlpatterns = [
     path("api/reports/export/", ExportView.as_view(), name="reports_export"),
     path("api/anomalies/", AnomaliesView.as_view(), name="anomalies_list"),
     path("api/audit-logs/", AuditLogListView.as_view(), name="audit_logs_list"),
+
+    # Système de caisse (POS) — app mobile
+    path("api/caisse/produits/", CaisseProduitsView.as_view(), name="caisse_api_produits"),
+    path("api/caisse/session/", CaisseSessionView.as_view(), name="caisse_api_session"),
+    path("api/caisse/session/cloture/", CaisseClotureView.as_view(), name="caisse_api_cloture"),
+    path("api/caisse/ventes/", CaisseVentesView.as_view(), name="caisse_api_ventes"),
 
     # Assistant TresorIA
     path("api/assistant/ask/", AskView.as_view(), name="assistant_ask"),
